@@ -1,112 +1,121 @@
-use crate::event::{Event, EventReceiver};
+use super::ws_utils::*;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
-use futures::StreamExt;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use futures::stream::{SplitSink, SplitStream};
+use futures::{SinkExt, StreamExt};
+use reqwest::IntoUrl;
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 use url::Url;
 
-// type ListenerList<T> = Arc<RwLock<Vec<T>>>;
-
-pub struct WsClient {
-	receiver: Receiver<Event>,
-	is_running: Arc<AtomicBool>
+pub struct WsService {
+	close_sender: broadcast::Sender<()>,
+	api_receiver: Option<Receiver<String>>,
+	msg_sender: Option<Sender<String>>,
+	url: Url,
 }
 
-impl WsClient {
-	pub async fn new(url: &str) -> anyhow::Result<Self> {
-		let (ws_stream, _) = connect_async(url).await?;
-		let (tx, rx) = flume::unbounded::<Event>();
-		let is_running = Arc::new(AtomicBool::new(true));
-		Self::listen(tx, ws_stream, Arc::clone(&is_running));
+impl Drop for WsService {
+	fn drop(&mut self) {
+		let _ = self.close_sender.send(());
+	}
+}
+
+impl WsService {
+	pub fn new(url: impl IntoUrl) -> reqwest::Result<Self> {
+		let (close_sender, _) = broadcast::channel(4);
 		Ok(Self {
-			receiver: rx,
-			is_running
+			close_sender,
+			api_receiver: None,
+			msg_sender: None,
+			url: url.into_url()?,
 		})
 	}
 
-	pub async fn new_with_token(url: &str, token: Option<String>) -> anyhow::Result<Self> {
+	pub fn new_with_token(url: impl IntoUrl, token: Option<String>) -> reqwest::Result<Self> {
 		if let Some(token) = token {
-			let mut url = Url::from_str(url)?;
+			let mut url = url.into_url()?;
 			url.set_query(Some(&format!("access_token={}", token)));
-			Self::new(url.as_str()).await
+			Self::new(url)
 		} else {
-			Self::new(url).await
+			Self::new(url)
 		}
-	}
-
-	fn listen(tx: Sender<Event>, mut ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>, is_running: Arc<AtomicBool>) {
-		tokio::spawn(async move {
-			let mut task_fn = async move || {
-				while let Some(msg) = ws_stream.next().await {
-					let is_running = is_running.load(Ordering::Relaxed);
-					if !is_running {
-						return
-					}
-					match msg {
-						Ok(Message::Text(data)) => {
-							let str = data.as_str();
-							if let Ok(event) = serde_json::from_str(str) {
-								let _ = tx.send_async(event).await;
-							};
-						},
-						_ => ()
-					}
-				}
-			};
-
-			task_fn().await;
-		});
-	}
-	
-	pub async fn restart(&mut self) -> anyhow::Result<()> {
-		todo!() // TODO 客户端的手动重启及自动重启
 	}
 }
 
-// 实现Drop特征防止内存泄露
-impl Drop for WsClient {
-	fn drop(&mut self) {
-		self.is_running.fetch_not(Ordering::Relaxed);
+impl WsService {
+	async fn connect(&self) -> anyhow::Result<()> {
+		if self.msg_sender.is_none() || self.api_receiver.is_none() {
+			return Err(anyhow!("msg_sender or api_receiver is none"));
+		}
+		let api_receiver = self.api_receiver.clone().unwrap();
+		let msg_sender = self.msg_sender.clone().unwrap();
+		let (ws_stream, _) = connect_async(self.url.as_str()).await?;
+		let (write_half, read_half) = ws_stream.split();
+		let write_half_close_receiver = self.close_sender.subscribe();
+		let read_half_close_receiver = self.close_sender.subscribe();
+		tokio::spawn(async move {
+			Self::ws_stream_writer(write_half_close_receiver, api_receiver, write_half).await
+		});
+		tokio::spawn(async move {
+			Self::ws_stream_reader(read_half_close_receiver, msg_sender, read_half).await
+		});
+		Ok(())
+	}
+
+	async fn ws_stream_writer(
+		mut close_receiver: broadcast::Receiver<()>,
+		api_receiver: Receiver<String>,
+		mut write_half: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+	) {
+		loop {
+			tokio::select! {
+				msg = api_receiver.recv_async() => {
+					if let Ok(msg) = msg {
+						let _ = write_half.send(Message::Text(msg.into())).await;
+					}
+				}
+				_ = close_receiver.recv() => {
+					return
+				}
+			}
+		}
+	}
+
+	async fn ws_stream_reader(
+		mut close_receiver: broadcast::Receiver<()>,
+		msg_sender: Sender<String>,
+		mut read_half: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+	) {
+		loop {
+			tokio::select! {
+				msg = read_half.next() => {
+					if let Some(Ok(Message::Text(data))) = msg {
+						let _ = msg_sender.send_async(data.to_string()).await;
+					}
+				}
+				_ = close_receiver.recv() => {
+					return
+				}
+			}
+		}
 	}
 }
 
 #[async_trait]
-impl EventReceiver for WsClient {
-	fn get_receiver(&self) -> Receiver<Event> {
-		self.receiver.clone()
+impl WebSocketService for WsService {
+	fn register_api_receiver(&mut self, api_receiver: Receiver<String>) {
+		self.api_receiver = Some(api_receiver)
+	}
+
+	fn register_msg_sender(&mut self, msg_sender: Sender<String>) {
+		self.msg_sender = Some(msg_sender)
+	}
+
+	async fn start(&self) -> anyhow::Result<()> {
+		self.connect().await
 	}
 }
-
-// impl APISender for WsClient {}
-
-// #[async_trait]
-// impl<T: AsyncFn(Event) -> anyhow::Result<()> + Send + Sync +'static> EventReceiver<T> for WsClient<T> {
-// 	async fn wait_event(&self) -> anyhow::Result<EventStream> {
-//
-// 	}
-//
-// 	async fn listen(&mut self, listener: T) -> anyhow::Result<()> {
-// 		self.listeners.write().await.push(listener);
-// 		if !self.is_handing {
-// 			let rx = Arc::clone(&self.receiver);
-// 			let listeners = Arc::clone(&self.listeners);
-// 			tokio::spawn(async move {
-// 				let mut rx = rx.lock().await;
-// 				while let Some(event) = rx.recv().await {
-// 					let listeners = listeners.read().await;
-// 					for listener in listeners.iter() {
-// 						listener(event.clone()).await;
-// 					}
-// 				}
-// 			});
-// 			self.is_handing = true;
-// 		}
-// 		Ok(())
-// 	}
-// }
-

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-mod segment;
+pub mod segment;
 mod segment_builder;
 
-pub use segment_builder::SegmentBuilder;
 pub use segment::Segment;
+pub use segment_builder::SegmentBuilder;

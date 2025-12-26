@@ -1,6 +1,6 @@
-use serde::Deserialize;
-use serde_json::Value;
 use crate::message::Segment;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Deserialize, Debug, Clone)]
 pub enum Sex {
@@ -9,7 +9,7 @@ pub enum Sex {
 	#[serde(rename = "female")]
 	Female,
 	#[serde(rename = "unknown")]
-	Unknown
+	Unknown,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -23,7 +23,7 @@ pub enum MessageEvent {
 		message: Vec<Segment>,
 		raw_message: String,
 		font: i32,
-		sender: PrivateMessageSender
+		sender: PrivateMessageSender,
 	},
 
 	#[serde(rename = "group")]
@@ -36,8 +36,8 @@ pub enum MessageEvent {
 		message: Vec<Segment>,
 		raw_message: String,
 		font: i32,
-		sender: GroupMessageSender
-	}
+		sender: GroupMessageSender,
+	},
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -45,7 +45,7 @@ pub struct PrivateMessageSender {
 	user_id: Option<i64>,
 	nickname: Option<String>,
 	sex: Option<Sex>,
-	age: Option<i32>
+	age: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -55,14 +55,14 @@ pub enum PrivateMessageSubType {
 	#[serde(rename = "group")]
 	Group,
 	#[serde(rename = "other")]
-	Other
+	Other,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct GroupMessageAnonymous {
 	id: i64,
 	name: String,
-	flag: String
+	flag: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -75,7 +75,7 @@ pub struct GroupMessageSender {
 	area: Option<String>,
 	level: Option<String>,
 	role: Option<GroupMessageSenderRole>,
-	title: Option<String>
+	title: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -85,7 +85,7 @@ pub enum GroupMessageSenderRole {
 	#[serde(rename = "admin")]
 	Admin,
 	#[serde(rename = "member")]
-	Member
+	Member,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -95,5 +95,5 @@ pub enum GroupMessageSubType {
 	#[serde(rename = "anonymous")]
 	Anonymous,
 	#[serde(rename = "notice")]
-	Notice
+	Notice,
 }

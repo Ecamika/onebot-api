@@ -1,15 +1,13 @@
+use crate::event::{meta::MetaEvent, notice::NoticeEvent, request::RequestEvent};
 use async_trait::async_trait;
 use flume::Receiver;
-use serde::Deserialize;
-
 use message::MessageEvent;
-
-use crate::event::{meta::MetaEvent, notice::NoticeEvent, request::RequestEvent};
-mod message;
-mod meta;
-mod notice;
-mod request;
-
+use serde::Deserialize;
+use tokio::sync::broadcast;
+pub mod message;
+pub mod meta;
+pub mod notice;
+pub mod request;
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "post_type")]
@@ -19,7 +17,7 @@ pub enum Event {
 		time: i64,
 		self_id: i64,
 		#[serde(flatten)]
-		data: MessageEvent
+		data: Box<MessageEvent>,
 	},
 
 	#[serde(rename = "notice")]
@@ -27,7 +25,7 @@ pub enum Event {
 		time: i64,
 		self_id: i64,
 		#[serde(flatten)]
-		data: NoticeEvent
+		data: NoticeEvent,
 	},
 
 	#[serde(rename = "request")]
@@ -35,7 +33,7 @@ pub enum Event {
 		time: i64,
 		self_id: i64,
 		#[serde(flatten)]
-		data: RequestEvent
+		data: RequestEvent,
 	},
 
 	#[serde(rename = "meta_event")]
@@ -43,8 +41,8 @@ pub enum Event {
 		time: i64,
 		self_id: i64,
 		#[serde(flatten)]
-		data: MetaEvent
-	}
+		data: MetaEvent,
+	},
 }
 
 // pub struct EventStream {}
@@ -57,11 +55,14 @@ pub enum Event {
 // 	}
 // }
 
+pub trait EventTrait {}
+
+impl EventTrait for Event {}
+
 #[async_trait]
-pub trait EventReceiver {
+pub trait EventReceiver<T: EventTrait> {
 	// async fn wait_event(&self) -> anyhow::Result<EventStream>; TODO
 	// async fn listen(&mut self, listener: T) -> anyhow::Result<()>; TODO
 
-	fn get_receiver(&self) -> Receiver<Event>;
+	fn get_receiver(&self) -> broadcast::Receiver<T>;
 }
-

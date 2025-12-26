@@ -1,16 +1,14 @@
-use axum::handler::HandlerWithoutStateExt;
-use axum::{Json, Router};
+use crate::event::{Event, EventReceiver};
 use axum::body::Bytes;
+use axum::handler::HandlerWithoutStateExt;
 use axum::http::HeaderMap;
 use axum::routing::{get, post};
+use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::mpsc;
-use crate::event::{Event, EventReceiver};
 
-pub struct HttpPostServer {
-
-}
+pub struct HttpPostServer {}
 
 impl HttpPostServer {
 	// pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {

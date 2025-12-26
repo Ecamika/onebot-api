@@ -7,21 +7,21 @@ pub enum NoticeEvent {
 	GroupUpload {
 		group_id: i64,
 		user_id: i64,
-		file: GroupFile
+		file: GroupFile,
 	},
 
 	#[serde(rename = "group_admin")]
 	GroupAdmin {
 		sub_type: GroupAdminType,
 		group_id: i64,
-		user_id: i64
+		user_id: i64,
 	},
 
 	#[serde(rename = "group_decrease")]
 	GroupDecrease {
 		sub_type: GroupAdminType,
 		operator_id: i64,
-		user_id: i64
+		user_id: i64,
 	},
 
 	#[serde(rename = "group_increate")]
@@ -29,7 +29,7 @@ pub enum NoticeEvent {
 		sub_type: GroupIncreaseType,
 		group_id: i64,
 		operator_id: i64,
-		user_id: i64
+		user_id: i64,
 	},
 
 	#[serde(rename = "group_ban")]
@@ -38,35 +38,30 @@ pub enum NoticeEvent {
 		group_id: i64,
 		operator_id: i64,
 		user_id: i64,
-		duration: i64
+		duration: i64,
 	},
 
 	#[serde(rename = "friend_add")]
-	FriendAdd {
-		user_id: i64
-	},
+	FriendAdd { user_id: i64 },
 
 	#[serde(rename = "group_recall")]
 	GroupRecall {
 		group_id: i64,
 		user_id: i64,
 		operator_id: i64,
-		message_id: i64
+		message_id: i64,
 	},
 
 	#[serde(rename = "friend_recall")]
-	FriendRecall {
-		user_id: i64,
-		message_id: i64
-	},
+	FriendRecall { user_id: i64, message_id: i64 },
 
 	#[serde(rename = "notify")]
 	Notify {
 		group_id: i64,
 		user_id: i64,
 		#[serde(flatten)]
-		data: NotifyType
-	}
+		data: NotifyType,
+	},
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -74,7 +69,7 @@ pub struct GroupFile {
 	pub id: String,
 	pub name: String,
 	pub size: i64,
-	pub busid: i64
+	pub busid: i64,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -82,7 +77,7 @@ pub enum GroupAdminType {
 	#[serde(rename = "set")]
 	Set,
 	#[serde(rename = "unset")]
-	Unset
+	Unset,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -92,7 +87,7 @@ pub enum GroupDecreaseType {
 	#[serde(rename = "kick")]
 	Kick,
 	#[serde(rename = "kick_me")]
-	KickMe
+	KickMe,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -100,7 +95,7 @@ pub enum GroupIncreaseType {
 	#[serde(rename = "approve")]
 	Approve,
 	#[serde(rename = "invite")]
-	Invite
+	Invite,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -108,24 +103,18 @@ pub enum GroupBanType {
 	#[serde(rename = "ban")]
 	Ban,
 	#[serde(rename = "lift_ban")]
-	LiftBan
+	LiftBan,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "sub_type")]
 pub enum NotifyType {
 	#[serde(rename = "poke")]
-	Poke {
-		target_id: i64
-	},
+	Poke { target_id: i64 },
 	#[serde(rename = "lucky_king")]
-	LuckyKing {
-		target_id: i64
-	},
+	LuckyKing { target_id: i64 },
 	#[serde(rename = "honor")]
-	Honor {
-		honor_type: HonorType
-	}
+	Honor { honor_type: HonorType },
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -135,5 +124,5 @@ pub enum HonorType {
 	#[serde(rename = "performer")]
 	Performer,
 	#[serde(rename = "emotion")]
-	Emotion
+	Emotion,
 }

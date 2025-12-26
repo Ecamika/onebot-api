@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DeveloperToolsToolWindowSettingsV1" lastSelectedContentNodeId="ascii-art" pluginVersion="7.1.0">
+    <developerToolsConfigurations>
+      <developerToolConfiguration developerToolId="ascii-art" id="9c32689c-ae32-47a1-a058-af87e680539b" name="Workbench">
+        <properties>
+          <property key="textInput" type="INPUT" value="kotlin.String|Thank you use this too" />
+        </properties>
+      </developerToolConfiguration>
+    </developerToolsConfigurations>
+  </component>
+</project>
