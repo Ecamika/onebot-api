@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 
+mod communication_utils;
 pub mod http;
 pub mod http_post;
+mod sse;
 pub mod ws;
 pub mod ws_reverse;
-mod ws_utils;
 
-pub use ws_utils::WsClient;
+pub use communication_utils::Client;

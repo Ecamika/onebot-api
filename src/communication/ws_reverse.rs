@@ -1,11 +1,11 @@
-use crate::communication::ws_utils::WebSocketService;
+use crate::communication::communication_utils::CommunicationService;
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
 
 pub struct WsReverseService {}
 
 #[async_trait]
-impl WebSocketService for WsReverseService {
+impl CommunicationService for WsReverseService {
 	fn register_api_receiver(&mut self, api_receiver: Receiver<String>) {
 		todo!()
 	}

@@ -41,14 +41,14 @@ pub enum WsEvent {
 impl EventTrait for WsEvent {}
 
 #[async_trait]
-pub trait WebSocketService: Send + Sync {
+pub trait CommunicationService: Send + Sync {
 	fn register_api_receiver(&mut self, api_receiver: Receiver<String>);
 	fn register_msg_sender(&mut self, msg_sender: Sender<String>);
 	async fn start(&self) -> anyhow::Result<()>;
 }
 
-pub struct WsClient {
-	service: Box<dyn WebSocketService>, // 使用DI解耦
+pub struct Client {
+	service: Box<dyn CommunicationService>, // 使用DI解耦
 	msg_sender: Sender<String>,
 	// msg_receiver: Receiver<String>,
 	api_sender: Sender<String>,
@@ -59,8 +59,8 @@ pub struct WsClient {
 	max_waiting_times: Option<i32>,
 }
 
-impl WsClient {
-	pub fn with_service(mut service: Box<dyn WebSocketService>) -> Self {
+impl Client {
+	pub fn with_service(mut service: Box<dyn CommunicationService>) -> Self {
 		let (msg_sender, msg_receiver) = flume::unbounded();
 		let (api_sender, api_receiver) = flume::unbounded();
 		let (close_sender, close_receiver) = flume::unbounded();
@@ -90,22 +90,22 @@ impl WsClient {
 		self.service.start().await
 	}
 
-	pub fn change_service(&mut self, mut service: Box<dyn WebSocketService>) {
+	pub fn change_service(&mut self, mut service: Box<dyn CommunicationService>) {
 		service.register_api_receiver(self.api_receiver.clone());
 		service.register_msg_sender(self.msg_sender.clone());
 		self.service = service;
 	}
 
-	pub fn get_service(&self) -> &dyn WebSocketService {
+	pub fn get_service(&self) -> &dyn CommunicationService {
 		&*self.service
 	}
 
-	pub fn get_service_mut(&mut self) -> &mut dyn WebSocketService {
+	pub fn get_service_mut(&mut self) -> &mut dyn CommunicationService {
 		&mut *self.service
 	}
 }
 
-impl WsClient {
+impl Client {
 	fn spawn_event_listener(
 		msg_receiver: Receiver<String>,
 		broadcast_sender: Arc<broadcast::Sender<WsEvent>>,
@@ -214,14 +214,14 @@ impl WsClient {
 	}
 }
 
-impl Drop for WsClient {
+impl Drop for Client {
 	fn drop(&mut self) {
 		let _ = self.close_sender.send(());
 	}
 }
 
 #[async_trait]
-impl EventReceiver<WsEvent> for WsClient {
+impl EventReceiver<WsEvent> for Client {
 	fn get_receiver(&self) -> broadcast::Receiver<WsEvent> {
 		self.broadcast_sender.subscribe()
 	}
@@ -229,7 +229,7 @@ impl EventReceiver<WsEvent> for WsClient {
 
 #[allow(unused_variables)]
 #[async_trait]
-impl APISender for WsClient {
+impl APISender for Client {
 	#[generate_json]
 	async fn send_private_msg(
 		&self,

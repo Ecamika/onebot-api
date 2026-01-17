@@ -1,4 +1,4 @@
-use super::ws_utils::*;
+use super::communication_utils::*;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use flume::{Receiver, Sender};
@@ -106,7 +106,7 @@ impl WsService {
 }
 
 #[async_trait]
-impl WebSocketService for WsService {
+impl CommunicationService for WsService {
 	fn register_api_receiver(&mut self, api_receiver: Receiver<String>) {
 		self.api_receiver = Some(api_receiver)
 	}

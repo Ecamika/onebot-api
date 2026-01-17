@@ -1,6 +1,6 @@
 [package]
 name = "onebot-api"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Alex Chen <m.ac.alexchen@outlook.com>"]
 description = "Onebot API"
@@ -11,7 +11,7 @@ anyhow = "1.0.100"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = "0.3.31"
-reqwest = "0.12.28"
+reqwest = { version = "0.13.1", features = ["rustls"] }
 axum = { version = "0.8.8", optional = true }
 tokio = { version = "1.48.0", features = ["full"] }
 tokio-tungstenite = { version = "0.28.0", features = ["native-tls"], optional = true }
@@ -30,8 +30,9 @@ websocket = ["tokio-tungstenite"]
 websocket-reverse = ["axum"]
 http = []
 http-post = ["axum"]
+sse = []
 
-default = ["websocket", "websocket-reverse", "http", "http-post"]
+default = ["websocket", "websocket-reverse", "http", "http-post", "sse"]
 
 [workspace]
 members = ["crates/*"]
