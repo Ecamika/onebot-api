@@ -1,4 +1,5 @@
 use super::utils::*;
+use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use bytes::Bytes;
 use eventsource_stream::{EventStream, Eventsource};
@@ -71,9 +72,9 @@ impl CommunicationService for SseService {
 		self.event_sender = Some(event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
+	async fn start_service(&self) -> ServiceStartResult<()> {
 		if self.event_sender.is_none() {
-			return Err(anyhow::anyhow!("event sender is none"));
+			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 
 		tokio::spawn(Self::eventsource_listener(self.clone()));

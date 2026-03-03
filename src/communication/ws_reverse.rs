@@ -1,4 +1,5 @@
 use super::utils::*;
+use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
@@ -163,9 +164,13 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for WsReverseS
 		self.event_sender = Some(event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
-		if self.api_receiver.is_none() || self.event_sender.is_none() {
-			return Err(anyhow::anyhow!("api receiver or event sender is none"));
+	async fn start_service(&self) -> ServiceStartResult<()> {
+		if self.api_receiver.is_none() && self.event_sender.is_none() {
+			return Err(ServiceStartError::NotInjected);
+		} else if self.event_sender.is_none() {
+			return Err(ServiceStartError::NotInjectedEventSender);
+		} else if self.api_receiver.is_none() {
+			return Err(ServiceStartError::NotInjectedAPIReceiver);
 		}
 
 		let api_receiver = self.api_receiver.clone().unwrap();

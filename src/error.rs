@@ -1,51 +1,35 @@
-// use std::fmt::{Display, Formatter};
+use crate::communication::utils::APIRequest;
+use std::error::Error;
 use thiserror::Error as TError;
 
 pub type APIResult<T> = Result<T, APIRequestError>;
+pub type ServiceStartResult<T> = Result<T, ServiceStartError>;
 
-#[derive(Debug, TError, Clone)]
+#[derive(Debug, TError)]
 pub enum APIRequestError {
 	#[error("There is no result returned in time")]
 	Timeout,
 	#[error("The request failed with code: {:?}", code)]
-	HttpError { code: HttpCode },
+	HttpError { code: i32 },
+	#[error("Deserialize failed")]
+	DeserializeError(#[from] serde_json::Error),
+	#[error("Send request failed")]
+	SendError(#[from] flume::SendError<APIRequest>),
 }
 
-#[derive(Debug, Clone)]
-pub enum HttpCode {
-	Ok,
-	BadRequest,
-	Unauthorized,
-	Forbidden,
-	NotFound,
-	NotAcceptable,
-	Unknown(i32),
-}
-
-impl HttpCode {
-	pub fn from_http_code(http_code: i32) -> Self {
-		match http_code {
-			200 => Self::Ok,
-			400 => Self::BadRequest,
-			401 => Self::Unauthorized,
-			403 => Self::Forbidden,
-			404 => Self::NotFound,
-			406 => Self::NotAcceptable,
-			other => Self::Unknown(other),
-		}
-	}
-
-	pub fn retcode_to_http_code(retcode: i32) -> i32 {
-		retcode - 1000
-	}
-
-	pub fn from_retcode(retcode: i32) -> Self {
-		Self::from_http_code(Self::retcode_to_http_code(retcode))
-	}
-}
-
-impl From<i32> for HttpCode {
-	fn from(value: i32) -> Self {
-		Self::from_http_code(value)
-	}
+#[derive(Debug, TError)]
+pub enum ServiceStartError {
+	#[error("unknown error")]
+	Unknown(Box<dyn Error + Send + Sync>),
+	#[error("can not find the event sender")]
+	NotInjectedEventSender,
+	#[error("can not find the api receiver")]
+	NotInjectedAPIReceiver,
+	#[error("can not find event sender and api receiver")]
+	NotInjected,
+	#[error("can not create tcp listener")]
+	TcpListenerError(#[from] tokio::io::Error),
+	#[cfg(feature = "websocket")]
+	#[error("can not create websocket connection")]
+	WebSocketConnectError(#[from] tokio_tungstenite::tungstenite::Error),
 }

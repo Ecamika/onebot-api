@@ -1,4 +1,5 @@
 use crate::communication::utils::*;
+use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use tokio::select;
 use tokio::sync::broadcast;
@@ -65,7 +66,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		self.event_sender = Some(event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
+	async fn start_service(&self) -> ServiceStartResult<()> {
 		async fn processor(
 			mut close_signal: broadcast::Receiver<()>,
 			mut event_process_receiver: EventReceiver,
@@ -84,7 +85,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		}
 
 		if self.event_sender.is_none() {
-			return Err(anyhow::anyhow!("event sender is none"));
+			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 		let event_sender = self.event_sender.clone().unwrap();
 
@@ -134,7 +135,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		self.read_side.inject(empty_api_receiver, event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
+	async fn start_service(&self) -> ServiceStartResult<()> {
 		futures::try_join!(
 			self.send_side.start_service(),
 			self.read_side.start_service()

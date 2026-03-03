@@ -1,11 +1,11 @@
 [package]
 name = "onebot-api"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
-authors = ["Alex Chen <m.ac.alexchen@outlook.com>"]
+authors = ["Ecamika <ecamika@outlook.com>"]
 description = "Onebot API"
-repository = "https://github.com/ACAlexChen/onebot-api.git"
-homepage = "https://github.com/ACAlexChen/onebot-api"
+repository = "https://github.com/Ecamika/onebot-api.git"
+homepage = "https://github.com/Ecamika/onebot-api"
 license = "MIT"
 license-file = "LICENSE"
 readme = "README.md"

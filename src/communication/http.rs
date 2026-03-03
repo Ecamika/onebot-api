@@ -1,4 +1,5 @@
 use super::utils::*;
+use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use reqwest::IntoUrl;
 use serde::Deserialize;
@@ -122,9 +123,13 @@ impl CommunicationService for HttpService {
 		self.event_sender = Some(event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
-		if self.api_receiver.is_none() || self.event_sender.is_none() {
-			return Err(anyhow::anyhow!("api receiver or event sender is none"));
+	async fn start_service(&self) -> ServiceStartResult<()> {
+		if self.api_receiver.is_none() && self.event_sender.is_none() {
+			return Err(ServiceStartError::NotInjected);
+		} else if self.event_sender.is_none() {
+			return Err(ServiceStartError::NotInjectedEventSender);
+		} else if self.api_receiver.is_none() {
+			return Err(ServiceStartError::NotInjectedAPIReceiver);
 		}
 
 		tokio::spawn(Self::api_processor(self.clone()));

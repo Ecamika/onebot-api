@@ -1,4 +1,5 @@
 use super::utils::*;
+use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use axum::Router;
 use axum::extract::State;
@@ -88,9 +89,9 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for HttpPostSe
 		self.event_sender = Some(event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
+	async fn start_service(&self) -> ServiceStartResult<()> {
 		if self.event_sender.is_none() {
-			return Err(anyhow::anyhow!("event sender is none"));
+			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 
 		let event_sender = self.event_sender.clone().unwrap();

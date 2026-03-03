@@ -355,5 +355,9 @@ async fn main() {
 - `WsService` 自动重连
 - `SseService` 自动重连
 - 更精细化的错误处理
-
+  - `Client` 实现无 `anyhow::Result` ✅
+  - 服务 task 实现无 `anyhow::Result`
+  - 取消服务 task 错误静默处理
+- 更完善的文档注释
+- 自定义Event反序列化
 

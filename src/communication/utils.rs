@@ -1,6 +1,7 @@
 use crate::api::APISender as APISenderTrait;
 use crate::api::arg_type::MessageType;
 use crate::api::return_type::*;
+use crate::error::{APIRequestError, APIResult, ServiceStartResult};
 pub use crate::event::Event as NormalEvent;
 use crate::event::EventReceiver as EventReceiverTrait;
 use crate::event::EventTrait;
@@ -46,9 +47,9 @@ impl APIResponse {
 		self.status == "ok"
 	}
 
-	pub fn parse_data<T: DeserializeOwned>(self) -> anyhow::Result<T> {
+	pub fn parse_data<T: DeserializeOwned>(self) -> APIResult<T> {
 		if !self.verify() {
-			return Err(anyhow::anyhow!("request failed with code {}", self.retcode));
+			return Err(APIRequestError::HttpError { code: self.retcode });
 		}
 		Ok(serde_json::from_value(self.data)?)
 	}
@@ -106,9 +107,9 @@ impl APIResponseListener for BroadcastReceiver<Arc<Event>> {
 }
 
 #[async_trait]
-pub trait CommunicationService: Sync + Send + Drop {
+pub trait CommunicationService: Sync + Send {
 	fn inject(&mut self, api_receiver: APIReceiver, event_sender: EventSender);
-	async fn start_service(&self) -> anyhow::Result<()>;
+	async fn start_service(&self) -> ServiceStartResult<()>;
 }
 
 #[async_trait]
@@ -117,7 +118,7 @@ impl CommunicationService for Box<dyn CommunicationService> {
 		(**self).inject(api_receiver, event_sender);
 	}
 
-	async fn start_service(&self) -> anyhow::Result<()> {
+	async fn start_service(&self) -> ServiceStartResult<()> {
 		(**self).start_service().await
 	}
 }
@@ -188,30 +189,60 @@ impl Client {
 }
 
 impl Client {
-	pub async fn start_service(&self) -> anyhow::Result<()> {
+	/// 启动服务
+	/// 在 `Client` 实例构造完成或调用 `change_service` 后都需要调用该方法启动服务
+	pub async fn start_service(&self) -> ServiceStartResult<()> {
 		self.service.start_service().await
 	}
 
+	/// 更换服务
+	/// 即使在原服务启动后也可以更换服务
+	/// 但需保证原服务被drop，即调用原服务的析构函数
+	///
+	/// # Examples
+	/// ```rust
+	/// use std::time::Duration;
+	/// use onebot_api::communication::utils::Client;
+	/// use onebot_api::communication::ws::WsService;
+	/// use onebot_api::communication::ws_reverse::WsReverseService;
+	///
+	/// let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
+	/// let mut client = Client::new(ws_service, Duration::from_secs(5), None, None);
+	/// client.start_service().await.unwrap();
+	///
+	/// let ws_reverse_service = WsReverseService::new("0.0.0.0:8080", Some("example_token".to_string()));
+	/// client.change_service(ws_reverse_service);
+	/// client.start_service().await.unwrap();
+	/// ```
 	pub fn change_service(&mut self, service: impl IntoService) -> Box<dyn CommunicationService> {
 		let mut service = Box::new(service.into());
 		service.inject(self.api_receiver.clone(), self.event_sender.clone());
 		std::mem::replace(&mut self.service, service)
 	}
 
+	/// 获取当前服务的引用
 	pub fn get_service(&self) -> &dyn CommunicationService {
 		&*self.service
 	}
 
+	/// 获取当前服务的可变引用
 	pub fn get_service_mut(&mut self) -> &mut dyn CommunicationService {
 		&mut *self.service
 	}
 }
 
 impl Client {
+	/// 随机生成uuid格式的id
+	/// 用于echo的生成
 	pub fn generate_id() -> String {
 		uuid::Uuid::new_v4().to_string()
 	}
 
+	/// 自动获取 `receiver` 并监听带有指定 `echo` 的API调用结果
+	///
+	/// # Returns
+	/// - `Some(api_response)` 成功获取API调用结果
+	/// - `None` 监听过程中事件通道被关闭或监听超时
 	pub async fn get_response(&self, echo: String) -> Option<APIResponse> {
 		let mut receiver = self.get_receiver();
 		if let Event::APIResponse(res) = &*(receiver.listen(echo, self.timeout).await?) {
@@ -221,7 +252,7 @@ impl Client {
 		}
 	}
 
-	pub fn parse_response<T: DeserializeOwned>(response: APIResponse) -> anyhow::Result<T> {
+	pub fn parse_response<T: DeserializeOwned>(response: APIResponse) -> APIResult<T> {
 		response.parse_data()
 	}
 
@@ -244,26 +275,32 @@ impl Client {
 	/// 生成echo并发送API请求  
 	/// 同时等待API响应并自动解析
 	///
+	/// # Params
+	/// - `action` 要调用的 `action` 的名称
+	/// - `params` 调用 `action` 所需要的参数
+	///
 	/// # Examples
 	/// ```rust
+	/// use std::time::Duration;
 	/// use serde_json::{json, Value};
 	/// use onebot_api::communication::utils::Client;
+	/// use onebot_api::communication::ws::WsService;
 	///
-	/// let client: Client = /* ... */;
-	/// let response: Value =  client.send_and_parse("action_name", json!({})).await.unwrap();
+	/// let client: Client = Client::new(WsService::new("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
+	/// let response: Value =  client.send_and_parse("send_like", json!({})).await.unwrap();
 	/// ```
 	pub async fn send_and_parse<T: DeserializeOwned>(
 		&self,
 		action: impl ToString,
 		params: JsonValue,
-	) -> anyhow::Result<T> {
+	) -> APIResult<T> {
 		let echo = Self::generate_id();
 		self
 			.send_request(action.to_string(), params, echo.clone())
 			.await?;
 		let response = self.get_response(echo).await;
 		if response.is_none() {
-			return Err(anyhow::anyhow!("request time out"));
+			return Err(APIRequestError::Timeout);
 		}
 		let response = response.unwrap();
 		Self::parse_response(response)
@@ -277,7 +314,7 @@ impl APISenderTrait for Client {
 		user_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> anyhow::Result<i32> {
+	) -> APIResult<i32> {
 		let params = json!({
 			"user_id": user_id,
 			"message": message,
@@ -292,7 +329,7 @@ impl APISenderTrait for Client {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> anyhow::Result<i32> {
+	) -> APIResult<i32> {
 		let params = json!({
 			"group_id": group_id,
 			"message": message,
@@ -309,7 +346,7 @@ impl APISenderTrait for Client {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> anyhow::Result<i32> {
+	) -> APIResult<i32> {
 		let params = json!({
 			"message_type": message_type,
 			"user_id": user_id,
@@ -321,21 +358,21 @@ impl APISenderTrait for Client {
 		Ok(response.message_id)
 	}
 
-	async fn delete_msg(&self, message_id: i32) -> anyhow::Result<()> {
+	async fn delete_msg(&self, message_id: i32) -> APIResult<()> {
 		let params = json!({
 			"message_id": message_id
 		});
 		self.send_and_parse("delete_msg", params).await
 	}
 
-	async fn get_msg(&self, message_id: i32) -> anyhow::Result<GetMsgResponse> {
+	async fn get_msg(&self, message_id: i32) -> APIResult<GetMsgResponse> {
 		let params = json!({
 			"message_id": message_id
 		});
 		self.send_and_parse("get_msg", params).await
 	}
 
-	async fn get_forward_msg(&self, id: String) -> anyhow::Result<Vec<ReceiveSegment>> {
+	async fn get_forward_msg(&self, id: String) -> APIResult<Vec<ReceiveSegment>> {
 		let params = json!({
 			"id": id
 		});
@@ -343,7 +380,7 @@ impl APISenderTrait for Client {
 		Ok(response.message)
 	}
 
-	async fn send_like(&self, user_id: i64, times: Option<i32>) -> anyhow::Result<()> {
+	async fn send_like(&self, user_id: i64, times: Option<i32>) -> APIResult<()> {
 		let params = json!({
 			"user_id": user_id,
 			"times": times
@@ -356,7 +393,7 @@ impl APISenderTrait for Client {
 		group_id: i32,
 		user_id: i32,
 		reject_add_request: Option<bool>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -370,7 +407,7 @@ impl APISenderTrait for Client {
 		group_id: i32,
 		user_id: i32,
 		duration: Option<i32>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -385,7 +422,7 @@ impl APISenderTrait for Client {
 		anonymous: Option<GroupMessageAnonymous>,
 		flag: Option<String>,
 		duration: Option<i32>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"anonymous": anonymous,
@@ -395,7 +432,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("set_group_anonymous_ban", params).await
 	}
 
-	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> anyhow::Result<()> {
+	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"enable": enable
@@ -408,7 +445,7 @@ impl APISenderTrait for Client {
 		group_id: i32,
 		user_id: i32,
 		enable: Option<bool>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -417,7 +454,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("set_group_admin", params).await
 	}
 
-	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> anyhow::Result<()> {
+	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"enable": enable
@@ -430,7 +467,7 @@ impl APISenderTrait for Client {
 		group_id: i32,
 		user_id: i32,
 		card: Option<String>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -439,7 +476,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("set_group_card", params).await
 	}
 
-	async fn set_group_name(&self, group_id: i32, group_name: String) -> anyhow::Result<()> {
+	async fn set_group_name(&self, group_id: i32, group_name: String) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"group_name": group_name
@@ -447,7 +484,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("set_group_name", params).await
 	}
 
-	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> anyhow::Result<()> {
+	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"is_dismiss": is_dismiss
@@ -461,7 +498,7 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		special_title: Option<String>,
 		duration: Option<i32>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -476,7 +513,7 @@ impl APISenderTrait for Client {
 		flag: String,
 		approve: Option<bool>,
 		remark: Option<String>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"flag": flag,
 			"approve": approve,
@@ -491,7 +528,7 @@ impl APISenderTrait for Client {
 		sub_type: String,
 		approve: Option<bool>,
 		reason: Option<String>,
-	) -> anyhow::Result<()> {
+	) -> APIResult<()> {
 		let params = json!({
 			"flag": flag,
 			"sub_type": sub_type,
@@ -501,7 +538,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("set_group_add_request", params).await
 	}
 
-	async fn get_login_info(&self) -> anyhow::Result<GetLoginInfoResponse> {
+	async fn get_login_info(&self) -> APIResult<GetLoginInfoResponse> {
 		let params = json!({});
 		self.send_and_parse("get_login_info", params).await
 	}
@@ -510,7 +547,7 @@ impl APISenderTrait for Client {
 		&self,
 		user_id: i32,
 		no_cache: Option<bool>,
-	) -> anyhow::Result<GetStrangerInfoResponse> {
+	) -> APIResult<GetStrangerInfoResponse> {
 		let params = json!({
 			"user_id": user_id,
 			"no_cache": no_cache
@@ -518,7 +555,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("get_stranger_info", params).await
 	}
 
-	async fn get_friend_list(&self) -> anyhow::Result<Vec<GetFriendListResponse>> {
+	async fn get_friend_list(&self) -> APIResult<Vec<GetFriendListResponse>> {
 		let params = json!({});
 		self.send_and_parse("get_friend_list", params).await
 	}
@@ -527,7 +564,7 @@ impl APISenderTrait for Client {
 		&self,
 		group_id: i32,
 		no_cache: Option<bool>,
-	) -> anyhow::Result<GetGroupInfoResponse> {
+	) -> APIResult<GetGroupInfoResponse> {
 		let params = json!({
 			"group_id": group_id,
 			"no_cache": no_cache
@@ -535,7 +572,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("get_group_info", params).await
 	}
 
-	async fn get_group_list(&self) -> anyhow::Result<Vec<GetGroupInfoResponse>> {
+	async fn get_group_list(&self) -> APIResult<Vec<GetGroupInfoResponse>> {
 		let params = json!({});
 		self.send_and_parse("get_group_list", params).await
 	}
@@ -545,7 +582,7 @@ impl APISenderTrait for Client {
 		group_id: i32,
 		user_id: i32,
 		no_cache: Option<bool>,
-	) -> anyhow::Result<GetGroupMemberInfoResponse> {
+	) -> APIResult<GetGroupMemberInfoResponse> {
 		let params = json!({
 			"group_id": group_id,
 			"user_id": user_id,
@@ -557,7 +594,7 @@ impl APISenderTrait for Client {
 	async fn get_group_member_list(
 		&self,
 		group_id: i32,
-	) -> anyhow::Result<Vec<GetGroupMemberInfoResponse>> {
+	) -> APIResult<Vec<GetGroupMemberInfoResponse>> {
 		let params = json!({
 			"group_id": group_id
 		});
@@ -568,7 +605,7 @@ impl APISenderTrait for Client {
 		&self,
 		group_id: i64,
 		honor_type: String,
-	) -> anyhow::Result<GetGroupMemberInfoResponse> {
+	) -> APIResult<GetGroupMemberInfoResponse> {
 		let params = json!({
 			"group_id": group_id,
 			"type": honor_type
@@ -576,7 +613,7 @@ impl APISenderTrait for Client {
 		self.send_and_parse("get_group_honor_info", params).await
 	}
 
-	async fn get_cookies(&self, domain: Option<String>) -> anyhow::Result<String> {
+	async fn get_cookies(&self, domain: Option<String>) -> APIResult<String> {
 		let params = json!({
 			"domain": domain
 		});
@@ -584,23 +621,20 @@ impl APISenderTrait for Client {
 		Ok(response.cookies)
 	}
 
-	async fn get_csrf_token(&self) -> anyhow::Result<i32> {
+	async fn get_csrf_token(&self) -> APIResult<i32> {
 		let params = json!({});
 		let response: GetCsrfTokenResponse = self.send_and_parse("get_csrf_token", params).await?;
 		Ok(response.token)
 	}
 
-	async fn get_credentials(
-		&self,
-		domain: Option<String>,
-	) -> anyhow::Result<GetCredentialsResponse> {
+	async fn get_credentials(&self, domain: Option<String>) -> APIResult<GetCredentialsResponse> {
 		let params = json!({
 			"domain": domain
 		});
 		self.send_and_parse("get_credentials", params).await
 	}
 
-	async fn get_record(&self, file: String, out_format: String) -> anyhow::Result<String> {
+	async fn get_record(&self, file: String, out_format: String) -> APIResult<String> {
 		let params = json!({
 			"file": file,
 			"out_format": out_format
@@ -609,7 +643,7 @@ impl APISenderTrait for Client {
 		Ok(response.file)
 	}
 
-	async fn get_image(&self, file: String) -> anyhow::Result<String> {
+	async fn get_image(&self, file: String) -> APIResult<String> {
 		let params = json!({
 			"file": file
 		});
@@ -617,36 +651,36 @@ impl APISenderTrait for Client {
 		Ok(response.file)
 	}
 
-	async fn can_send_image(&self) -> anyhow::Result<bool> {
+	async fn can_send_image(&self) -> APIResult<bool> {
 		let params = json!({});
 		let response: CanSendResponse = self.send_and_parse("can_send_image", params).await?;
 		Ok(response.yes)
 	}
 
-	async fn can_send_record(&self) -> anyhow::Result<bool> {
+	async fn can_send_record(&self) -> APIResult<bool> {
 		let params = json!({});
 		let response: CanSendResponse = self.send_and_parse("can_send_record", params).await?;
 		Ok(response.yes)
 	}
 
-	async fn get_status(&self) -> anyhow::Result<GetStatusResponse> {
+	async fn get_status(&self) -> APIResult<GetStatusResponse> {
 		let params = json!({});
 		self.send_and_parse("get_status", params).await
 	}
 
-	async fn get_version_info(&self) -> anyhow::Result<GetVersionInfoResponse> {
+	async fn get_version_info(&self) -> APIResult<GetVersionInfoResponse> {
 		let params = json!({});
 		self.send_and_parse("get_version_info", params).await
 	}
 
-	async fn set_restart(&self, delay: Option<i32>) -> anyhow::Result<()> {
+	async fn set_restart(&self, delay: Option<i32>) -> APIResult<()> {
 		let params = json!({
 			"delay": delay
 		});
 		self.send_and_parse("set_restart", params).await
 	}
 
-	async fn clean_cache(&self) -> anyhow::Result<()> {
+	async fn clean_cache(&self) -> APIResult<()> {
 		let params = json!({});
 		self.send_and_parse("clean_cache", params).await
 	}
