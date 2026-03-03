@@ -352,8 +352,8 @@ async fn main() {
 因此，你可以像使用 `println` 宏一样使用 `text` 宏
 
 # Todo List
-- `WsService` 自动重连
-- `SseService` 自动重连
+- `WsService` 自动重连 ✅ （还没测试）
+- `SseService` 自动重连 ✅ （好像已经`eventsource-stream`已经实现了来着）
 - 更精细化的错误处理
   - `Client` 实现无 `anyhow::Result` ✅
   - 服务 task 实现无 `anyhow::Result`
