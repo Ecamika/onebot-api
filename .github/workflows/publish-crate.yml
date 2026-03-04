@@ -18,6 +18,12 @@ jobs:
       - name: Setup PATH for Rust
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      - name: Debug PATH and cargo
+        run: |
+          echo "PATH: $PATH"
+          which cargo
+          cargo --version
+
       - name: Publish to crates.io
         run: cargo publish --token ${CARGO_PUBLISH}
         env:

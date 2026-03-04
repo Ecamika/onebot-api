@@ -92,7 +92,9 @@ async function main() {
     generate_release_notes: true
   })
 
-  await runScript(["cargo", "publish", "--token", CARGO_PUBLISH], baseDir)
+  const CARGO_PATH = `${Deno.env.get("HOME")}/.cargo/bin/cargo`
+
+  await runScript([CARGO_PATH, "publish", "--token", CARGO_PUBLISH], baseDir)
 
 }
 
