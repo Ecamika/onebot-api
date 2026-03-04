@@ -41,7 +41,7 @@ async function main() {
     throw new Error("can not find necessary env")
   }
 
-  const [REPO_NAME, OWNER] = GITHUB_REPOSITORY.split("/")
+  const [OWNER, REPO_NAME] = GITHUB_REPOSITORY.split("/")
 
   if (!REPO_NAME || !OWNER) {
     throw new Error("GITHUB_REPOSITORY does not meet the format")
