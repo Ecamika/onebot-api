@@ -54,7 +54,7 @@ async function main() {
   const baseDir = Deno.cwd()
 
   const manifestPath = path.join(baseDir, "Cargo.toml")
-  const manifest = toml.parse(manifestPath) as unknown as Manifest
+  const manifest = toml.parse(await Deno.readTextFile(manifestPath)) as unknown as Manifest
 
   const reqUrl = `https://crates.io/api/v1/crates/${manifest.package.name}`
   const crateInfo = await (await fetch(reqUrl)).json() as CrateInfo
