@@ -20,8 +20,12 @@ jobs:
         with:
           deno-version: lts
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Run Script
         run: deno task publish-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_PUBLISH: ${{ secrets.CARGO_PUBLISH }}
 

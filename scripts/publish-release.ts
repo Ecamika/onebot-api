@@ -33,11 +33,29 @@ interface CrateInfo {
 //   }
 // }
 
+
+async function runScript(args: string[]) {
+  const cmd = new Deno.Command("/bin/sh", {
+    args,
+    stdout: "piped",
+    stderr: "piped"
+  })
+
+  const child = cmd.spawn()
+  child.stdout.pipeTo(Deno.stdout.writable)
+  child.stderr.pipeTo(Deno.stderr.writable)
+  const status = await child.status
+  if (!status.success) {
+    Deno.exit(status.code)
+  }
+}
+
 async function main() {
   const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")
   const GITHUB_REPOSITORY = Deno.env.get("GITHUB_REPOSITORY")
+  const CARGO_PUBLISH = Deno.env.get("CARGO_PUBLISH")
 
-  if (!GITHUB_TOKEN || !GITHUB_REPOSITORY) {
+  if (!GITHUB_TOKEN || !GITHUB_REPOSITORY || !CARGO_PUBLISH) {
     throw new Error("can not find necessary env")
   }
 
@@ -72,6 +90,8 @@ async function main() {
     name: tag,
     generate_release_notes: true
   })
+
+  await runScript(["cargo", "publish", "--token", "${CARGO_PUBLISH}"])
 
 }
 
