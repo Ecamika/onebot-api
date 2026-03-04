@@ -35,7 +35,7 @@ interface CrateInfo {
 
 
 async function runScript(args: string[], cwd?: string) {
-  const cmd = new Deno.Command("/bin/sh", {
+  const cmd = new Deno.Command("/bin/bash", {
     args,
     cwd,
     stdout: "piped",
@@ -92,9 +92,9 @@ async function main() {
     generate_release_notes: true
   })
 
-  const CARGO_PATH = `${Deno.env.get("HOME")}/.cargo/bin/cargo`
+  // const CARGO_PATH = `${Deno.env.get("HOME")}/.cargo/bin/cargo`
 
-  await runScript([CARGO_PATH, "publish", "--token", CARGO_PUBLISH], baseDir)
+  await runScript(["cargo", "publish", "--token", CARGO_PUBLISH], baseDir)
 
 }
 
