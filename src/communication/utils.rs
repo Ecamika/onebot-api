@@ -1,7 +1,7 @@
 use crate::api::APISender as APISenderTrait;
 use crate::api::arg_type::MessageType;
 use crate::api::return_type::*;
-use crate::error::{APIRequestError, APIResult, ServiceStartResult};
+use crate::error::{APIRequestError, APIResult, ServiceRuntimeError, ServiceStartResult};
 pub use crate::event::Event as NormalEvent;
 use crate::event::EventReceiver as EventReceiverTrait;
 use crate::event::EventTrait;
@@ -24,8 +24,33 @@ pub use tokio::sync::broadcast::Sender as BroadcastSender;
 
 pub type APISender = FlumeSender<APIRequest>;
 pub type APIReceiver = FlumeReceiver<APIRequest>;
+
+pub type InternalEventSender = FlumeSender<DeserializedEvent>;
+pub type InternalEventReceiver = FlumeReceiver<DeserializedEvent>;
+
+pub type ServiceRuntimeResult<T> = Result<T, ServiceRuntimeError>;
+
 pub type EventSender = BroadcastSender<Arc<Event>>;
 pub type EventReceiver = BroadcastReceiver<Arc<Event>>;
+
+pub type ArcServiceRuntimeError = Arc<ServiceRuntimeError>;
+pub type ArcAPIResponse = Arc<APIResponse>;
+pub type ArcNormalEvent = Arc<NormalEvent>;
+pub type ArcDeserializedEvent = Arc<DeserializedEvent>;
+
+#[derive(Deserialize, Clone, Debug, EnumIs)]
+#[serde(untagged)]
+pub enum DeserializedEvent {
+	APIResponse(APIResponse),
+	Event(JsonValue),
+}
+
+#[derive(Deserialize, Clone, Debug, EnumIs)]
+#[serde(untagged)]
+pub enum Event {
+	APIResponse(APIResponse),
+	Event(NormalEvent),
+}
 
 #[derive(Serialize, Clone, Debug)]
 pub struct APIRequest {
@@ -53,13 +78,6 @@ impl APIResponse {
 		}
 		Ok(serde_json::from_value(self.data)?)
 	}
-}
-
-#[derive(Deserialize, Clone, Debug, EnumIs)]
-#[serde(untagged)]
-pub enum Event {
-	APIResponse(APIResponse),
-	Event(NormalEvent),
 }
 
 impl EventTrait for Event {}

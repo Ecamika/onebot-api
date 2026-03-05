@@ -33,3 +33,9 @@ pub enum ServiceStartError {
 	#[error("can not create websocket connection")]
 	WebSocketConnectError(#[from] tokio_tungstenite::tungstenite::Error),
 }
+
+#[derive(Debug, TError)]
+pub enum ServiceRuntimeError {
+	#[error("unknown error")]
+	Unknown(Box<dyn Error + Send + Sync>),
+}

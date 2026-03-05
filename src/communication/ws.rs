@@ -14,6 +14,56 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use url::Url;
 
+pub struct WsServiceBuilder {
+	url: Url,
+	access_token: Option<String>,
+	auto_reconnect: Option<bool>,
+	reconnect_interval: Option<Duration>,
+	max_reconnect_times: Option<u32>,
+}
+
+impl WsServiceBuilder {
+	pub fn new(url: impl IntoUrl) -> reqwest::Result<Self> {
+		Ok(Self {
+			url: url.into_url()?,
+			access_token: None,
+			auto_reconnect: None,
+			reconnect_interval: None,
+			max_reconnect_times: None,
+		})
+	}
+
+	pub fn build(self) -> reqwest::Result<WsService> {
+		WsService::new(
+			self.url,
+			self.access_token,
+			self.auto_reconnect,
+			self.reconnect_interval,
+			self.max_reconnect_times,
+		)
+	}
+
+	pub fn access_token(mut self, access_token: String) -> Self {
+		self.access_token = Some(access_token);
+		self
+	}
+
+	pub fn auto_reconnect(mut self, auto_reconnect: bool) -> Self {
+		self.auto_reconnect = Some(auto_reconnect);
+		self
+	}
+
+	pub fn reconnect_interval(mut self, reconnect_interval: Duration) -> Self {
+		self.reconnect_interval = Some(reconnect_interval);
+		self
+	}
+
+	pub fn max_reconnect_times(mut self, max_reconnect_times: u32) -> Self {
+		self.max_reconnect_times = Some(max_reconnect_times);
+		self
+	}
+}
+
 #[derive(Clone, Debug)]
 pub struct WsService {
 	url: Url,
@@ -54,6 +104,10 @@ impl WsService {
 			reconnect_interval: reconnect_interval.unwrap_or(Duration::from_secs(10)),
 			max_reconnect_times: max_reconnect_times.unwrap_or(5),
 		})
+	}
+
+	pub fn builder(url: impl IntoUrl) -> reqwest::Result<WsServiceBuilder> {
+		WsServiceBuilder::new(url)
 	}
 }
 

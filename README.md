@@ -1,5 +1,8 @@
 # Onebot API
 
+[![Crates.io Version](https://img.shields.io/crates/v/onebot-api)](https://crates.io/crates/onebot-api)
+[![GitHub Release](https://img.shields.io/github/v/release/Ecamika/onebot-api)](https://github.com/Ecamika/onebot-api)
+
 库如其名，这是一个Onebot V11协议的实现  
 目前已完成对Onebot V11协议所有API的实现
 
@@ -9,7 +12,7 @@
 `Client` 内部使用了 `flume` 作为API调用通道（***mpsc***），`tokio broadcast` 作为事件通道（***mpmc***）  
 在与底层协议的交互方面，`Client` 内部使用了 **特征对象** 和 **依赖注入** ，这使得 `Client` 具备 **协议无关** 的特性  
 因此，`Client` 需要且仅需要专注于 **API调用** 与 **事件推送** 等核心逻辑层服务，对于底层协议的交互，则使用外部依赖实现  
-由此，`Client` 实现了逻辑层于协议层的解耦，也使得 `Client` 具备运行时切换底层协议的能力  
+由此，`Client` 实现了逻辑层与协议层的解耦，也使得 `Client` 具备运行时切换底层协议的能力  
 另外，由于 `Client` 与底层协议交互时使用了消息通道  
 因此，`Client` 天然具备 **线程安全** 并且不需要锁来防止竞态条件（`Arc<Client>`🤓☝️ | `Arc<Mutex<Client>>`👎😡）  
 对于资源管理方面，`Client` 实现了 `Drop` 特征，在 `Client` 析构时会自动清理其产生的所有资源  
@@ -352,12 +355,14 @@ async fn main() {
 因此，你可以像使用 `println` 宏一样使用 `text` 宏
 
 # Todo List
-- `WsService` 自动重连 ✅ （还没测试）
-- `SseService` 自动重连 ✅ （好像已经`eventsource-stream`已经实现了来着）
+- `WsService` 自动重连 ✅
+- `SseService` 自动重连 ❌ *（目前还没有方法能够在SSE连接突然断开后获得通知）*
 - 更精细化的错误处理
   - `Client` 实现无 `anyhow::Result` ✅
   - 服务 task 实现无 `anyhow::Result`
   - 取消服务 task 错误静默处理
 - 更完善的文档注释
 - 自定义Event反序列化
-
+- 更多的API！
+  - napcat API
+  - go-cqhttp API
