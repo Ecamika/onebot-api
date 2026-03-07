@@ -19,12 +19,13 @@ pub enum NoticeEvent {
 
 	#[serde(rename = "group_decrease")]
 	GroupDecrease {
-		sub_type: GroupAdminType,
+		sub_type: GroupDecreaseType,
+		group_id: i64,
 		operator_id: i64,
 		user_id: i64,
 	},
 
-	#[serde(rename = "group_increate")]
+	#[serde(rename = "group_increase")]
 	GroupIncrease {
 		sub_type: GroupIncreaseType,
 		group_id: i64,
