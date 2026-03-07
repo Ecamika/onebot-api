@@ -9,4 +9,5 @@ pub mod sse;
 pub mod utils;
 #[cfg(feature = "websocket")]
 pub mod ws;
+#[cfg(feature = "websocket-reverse")]
 pub mod ws_reverse;
