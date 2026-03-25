@@ -140,7 +140,7 @@ pub enum NoticeEvent {
 	#[serde(rename = "group_decrease")]
 	GroupDecrease(NoticeEventGroupDecrease),
 
-	#[serde(rename = "group_increate")]
+	#[serde(rename = "group_increase")]
 	GroupIncrease(NoticeEventGroupIncrease),
 
 	#[serde(rename = "group_ban")]
