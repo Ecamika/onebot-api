@@ -228,7 +228,7 @@ impl<T: CommunicationService + 'static> IntoService for T {
 /// use onebot_api::communication::utils::Client;
 /// use onebot_api::communication::ws::WsService;
 ///
-/// let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
+/// let ws_service = WsService::new_with_options("wss://example.com", Some("example_token".to_string())).unwrap();
 /// let client = Client::new_with_options(ws_service, Duration::from_secs(5), None, None);
 /// client.start_service().await.unwrap();
 /// ```
@@ -502,7 +502,7 @@ impl Client {
 	/// use onebot_api::communication::ws::WsService;
 	/// use onebot_api::communication::ws_reverse::WsReverseService;
 	///
-	/// let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
+	/// let ws_service = WsService::new_with_options("wss://example.com", Some("example_token".to_string())).unwrap();
 	/// let mut client = Client::new_with_options(ws_service, Duration::from_secs(5), None, None);
 	/// client.start_service().await.unwrap();
 	///
@@ -586,7 +586,7 @@ impl Client {
 	/// use onebot_api::communication::utils::Client;
 	/// use onebot_api::communication::ws::WsService;
 	///
-	/// let client: Client = Client::new_with_options(WsService::new("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
+	/// let client: Client = Client::new_with_options(WsService::new_with_options("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
 	/// let response: Value =  client.send_and_parse("send_like", json!({})).await.unwrap();
 	/// ```
 	pub async fn send_and_parse<T: DeserializeOwned>(

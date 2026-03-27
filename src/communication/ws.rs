@@ -34,7 +34,7 @@ impl WsServiceBuilder {
 	}
 
 	pub fn build(self) -> reqwest::Result<WsService> {
-		WsService::new(
+		WsService::new_with_options(
 			self.url,
 			self.access_token,
 			self.auto_reconnect,
@@ -85,7 +85,11 @@ impl Drop for WsService {
 }
 
 impl WsService {
-	pub fn new(
+	pub fn new(url: impl IntoUrl, access_token: Option<String>) -> reqwest::Result<Self> {
+		Self::new_with_options(url, access_token, None, None, None)
+	}
+
+	pub fn new_with_options(
 		url: impl IntoUrl,
 		access_token: Option<String>,
 		auto_reconnect: Option<bool>,
