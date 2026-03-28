@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "selector")]
 use crate::selector::Selector;
 use serde::Deserialize;
 use serde_json::Value;
@@ -21,11 +22,13 @@ pub struct MetaEventLifecycle {
 }
 
 impl MetaEventLifecycle {
+	#[cfg(feature = "selector")]
 	pub fn selector(&'_ self) -> Selector<'_, Self> {
 		Selector { data: Some(self) }
 	}
 }
 
+#[cfg(feature = "selector")]
 impl<'a> Selector<'a, MetaEventLifecycle> {
 	pub fn filter(&mut self, f: impl FnOnce(MetaEventLifecycle) -> bool) {
 		if let Some(data) = self.data
@@ -168,11 +171,13 @@ pub struct MetaEventHeartbeat {
 }
 
 impl MetaEventHeartbeat {
+	#[cfg(feature = "selector")]
 	pub fn selector(&'_ self) -> Selector<'_, Self> {
 		Selector { data: Some(self) }
 	}
 }
 
+#[cfg(feature = "selector")]
 impl<'a> Selector<'a, MetaEventHeartbeat> {
 	pub fn filter(&mut self, f: impl FnOnce(&MetaEventHeartbeat) -> bool) {
 		if let Some(data) = self.data
@@ -273,6 +278,7 @@ pub enum MetaEvent {
 }
 
 impl MetaEvent {
+	#[cfg(feature = "selector")]
 	pub fn selector(&'_ self) -> Selector<'_, Self> {
 		Selector { data: Some(self) }
 	}
@@ -332,6 +338,7 @@ impl MetaEvent {
 	}
 }
 
+#[cfg(feature = "selector")]
 impl<'a> Selector<'a, MetaEvent> {
 	pub fn lifecycle(&self) -> Selector<'a, MetaEventLifecycle> {
 		Selector {

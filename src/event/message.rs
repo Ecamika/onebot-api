@@ -2,6 +2,8 @@ use crate::api::APISender;
 use crate::error::{APIRequestError, APIResult};
 use crate::message::receive_segment::ReceiveSegment;
 use crate::message::send_segment::SendSegment;
+#[cfg(feature = "selector")]
+use crate::selector::Selector;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIs};
@@ -126,6 +128,317 @@ pub struct MessageEventPrivate {
 	pub sender: PrivateMessageSender,
 }
 
+impl MessageEventPrivate {
+	#[cfg(feature = "selector")]
+	pub fn selector(&'_ self) -> Selector<'_, Self> {
+		Selector { data: Some(self) }
+	}
+}
+
+#[cfg(feature = "selector")]
+impl<'a> Selector<'a, MessageEventPrivate> {
+	pub fn filter(&mut self, f: impl FnOnce(&MessageEventPrivate) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter(mut self, f: impl FnOnce(&MessageEventPrivate) -> bool) -> Self {
+		self.filter(f);
+		self
+	}
+
+	pub async fn filter_async(&mut self, f: impl AsyncFnOnce(&MessageEventPrivate) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_async(
+		mut self,
+		f: impl AsyncFnOnce(&MessageEventPrivate) -> bool,
+	) -> Self {
+		self.filter_async(f).await;
+		self
+	}
+
+	pub fn filter_sub_type(&mut self, f: impl FnOnce(PrivateMessageSubType) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.sub_type)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_sub_type(mut self, f: impl FnOnce(PrivateMessageSubType) -> bool) -> Self {
+		self.filter_sub_type(f);
+		self
+	}
+
+	pub async fn filter_sub_type_async(
+		&mut self,
+		f: impl AsyncFnOnce(PrivateMessageSubType) -> bool,
+	) {
+		if let Some(data) = self.data
+			&& !f(data.sub_type).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_sub_type_async(
+		mut self,
+		f: impl AsyncFnOnce(PrivateMessageSubType) -> bool,
+	) -> Self {
+		self.filter_sub_type_async(f).await;
+		self
+	}
+
+	pub fn filter_message_id(&mut self, f: impl FnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.message_id)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_message_id(mut self, f: impl FnOnce(i32) -> bool) -> Self {
+		self.filter_message_id(f);
+		self
+	}
+
+	pub async fn filter_message_id_async(&mut self, f: impl AsyncFnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.message_id).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_message_id_async(mut self, f: impl AsyncFnOnce(i32) -> bool) -> Self {
+		self.filter_message_id_async(f).await;
+		self
+	}
+
+	pub fn filter_user_id(&mut self, f: impl FnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.user_id)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_user_id(mut self, f: impl FnOnce(i64) -> bool) -> Self {
+		self.filter_user_id(f);
+		self
+	}
+
+	pub async fn filter_user_id_async(&mut self, f: impl AsyncFnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.user_id).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_user_id_async(mut self, f: impl AsyncFnOnce(i64) -> bool) -> Self {
+		self.filter_user_id_async(f).await;
+		self
+	}
+
+	pub fn filter_message(&mut self, f: impl FnOnce(&Vec<ReceiveSegment>) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.message)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_message(mut self, f: impl FnOnce(&Vec<ReceiveSegment>) -> bool) -> Self {
+		self.filter_message(f);
+		self
+	}
+
+	pub async fn filter_message_async(&mut self, f: impl AsyncFnOnce(&Vec<ReceiveSegment>) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.message).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_message_async(
+		mut self,
+		f: impl AsyncFnOnce(&Vec<ReceiveSegment>) -> bool,
+	) -> Self {
+		self.filter_message_async(f).await;
+		self
+	}
+
+	pub fn filter_raw_message(&mut self, f: impl FnOnce(&str) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.raw_message)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_raw_message(mut self, f: impl FnOnce(&str) -> bool) -> Self {
+		self.filter_raw_message(f);
+		self
+	}
+
+	pub async fn filter_raw_message_async(&mut self, f: impl AsyncFnOnce(&str) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.raw_message).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_raw_message_async(mut self, f: impl AsyncFnOnce(&str) -> bool) -> Self {
+		self.filter_raw_message_async(f).await;
+		self
+	}
+
+	pub fn filter_font(&mut self, f: impl FnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.font)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_font(mut self, f: impl FnOnce(i32) -> bool) -> Self {
+		self.filter_font(f);
+		self
+	}
+
+	pub async fn filter_font_async(&mut self, f: impl AsyncFnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.font).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_font_async(mut self, f: impl AsyncFnOnce(i32) -> bool) -> Self {
+		self.filter_font_async(f).await;
+		self
+	}
+
+	pub fn filter_sender(&mut self, f: impl FnOnce(&PrivateMessageSender) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.sender)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_sender(mut self, f: impl FnOnce(&PrivateMessageSender) -> bool) -> Self {
+		self.filter_sender(f);
+		self
+	}
+
+	pub async fn filter_sender_async(&mut self, f: impl AsyncFnOnce(&PrivateMessageSender) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.sender).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_sender_async(
+		mut self,
+		f: impl AsyncFnOnce(&PrivateMessageSender) -> bool,
+	) -> Self {
+		self.filter_sender_async(f).await;
+		self
+	}
+
+	pub fn friend(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_friend()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_friend(mut self) -> Self {
+		self.friend();
+		self
+	}
+
+	pub fn not_friend(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_friend()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_friend(mut self) -> Self {
+		self.not_friend();
+		self
+	}
+
+	pub fn group(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_group()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_group(mut self) -> Self {
+		self.group();
+		self
+	}
+
+	pub fn not_group(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_group()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_group(mut self) -> Self {
+		self.not_group();
+		self
+	}
+
+	pub fn other(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_other()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_other(mut self) -> Self {
+		self.other();
+		self
+	}
+
+	pub fn not_other(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_other()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_other(mut self) -> Self {
+		self.not_other();
+		self
+	}
+}
+
 #[cfg(feature = "quick_operation")]
 #[async_trait]
 impl<T: APISender + Send + Sync> QuickSendMsg<T> for MessageEventPrivate {
@@ -150,6 +463,372 @@ pub struct MessageEventGroup {
 	pub raw_message: String,
 	pub font: i32,
 	pub sender: GroupMessageSender,
+}
+
+impl MessageEventGroup {
+	#[cfg(feature = "selector")]
+	pub fn selector(&'_ self) -> Selector<'_, Self> {
+		Selector { data: Some(self) }
+	}
+}
+
+#[cfg(feature = "selector")]
+impl<'a> Selector<'a, MessageEventGroup> {
+	pub fn filter(&mut self, f: impl FnOnce(&MessageEventGroup) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter(mut self, f: impl FnOnce(&MessageEventGroup) -> bool) -> Self {
+		self.filter(f);
+		self
+	}
+
+	pub async fn filter_async(&mut self, f: impl AsyncFnOnce(&MessageEventGroup) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_async(mut self, f: impl AsyncFnOnce(&MessageEventGroup) -> bool) -> Self {
+		self.filter_async(f).await;
+		self
+	}
+
+	pub fn filter_sub_type(&mut self, f: impl FnOnce(GroupMessageSubType) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.sub_type)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_sub_type(mut self, f: impl FnOnce(GroupMessageSubType) -> bool) -> Self {
+		self.filter_sub_type(f);
+		self
+	}
+
+	pub async fn filter_sub_type_async(&mut self, f: impl AsyncFnOnce(GroupMessageSubType) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.sub_type).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_sub_type_async(
+		mut self,
+		f: impl AsyncFnOnce(GroupMessageSubType) -> bool,
+	) -> Self {
+		self.filter_sub_type_async(f).await;
+		self
+	}
+
+	pub fn filter_message_id(&mut self, f: impl FnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.message_id)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_message_id(mut self, f: impl FnOnce(i32) -> bool) -> Self {
+		self.filter_message_id(f);
+		self
+	}
+
+	pub async fn filter_message_id_async(&mut self, f: impl AsyncFnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.message_id).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_message_id_async(mut self, f: impl AsyncFnOnce(i32) -> bool) -> Self {
+		self.filter_message_id_async(f).await;
+		self
+	}
+
+	pub fn filter_group_id(&mut self, f: impl FnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.group_id)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_group_id(mut self, f: impl FnOnce(i64) -> bool) -> Self {
+		self.filter_group_id(f);
+		self
+	}
+
+	pub async fn filter_group_id_async(&mut self, f: impl AsyncFnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.group_id).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_group_id_async(mut self, f: impl AsyncFnOnce(i64) -> bool) -> Self {
+		self.filter_group_id_async(f).await;
+		self
+	}
+
+	pub fn filter_user_id(&mut self, f: impl FnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.user_id)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_user_id(mut self, f: impl FnOnce(i64) -> bool) -> Self {
+		self.filter_user_id(f);
+		self
+	}
+
+	pub async fn filter_user_id_async(&mut self, f: impl AsyncFnOnce(i64) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.user_id).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_user_id_async(mut self, f: impl AsyncFnOnce(i64) -> bool) -> Self {
+		self.filter_user_id_async(f).await;
+		self
+	}
+
+	pub fn filter_anonymous(&mut self, f: impl FnOnce(&Option<GroupMessageAnonymous>) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.anonymous)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_anonymous(
+		mut self,
+		f: impl FnOnce(&Option<GroupMessageAnonymous>) -> bool,
+	) -> Self {
+		self.filter_anonymous(f);
+		self
+	}
+
+	pub async fn filter_anonymous_async(
+		&mut self,
+		f: impl AsyncFnOnce(&Option<GroupMessageAnonymous>) -> bool,
+	) {
+		if let Some(data) = self.data
+			&& !f(&data.anonymous).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_anonymous_async(
+		mut self,
+		f: impl AsyncFnOnce(&Option<GroupMessageAnonymous>) -> bool,
+	) -> Self {
+		self.filter_anonymous_async(f).await;
+		self
+	}
+
+	pub fn filter_message(&mut self, f: impl FnOnce(&Vec<ReceiveSegment>) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.message)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_message(mut self, f: impl FnOnce(&Vec<ReceiveSegment>) -> bool) -> Self {
+		self.filter_message(f);
+		self
+	}
+
+	pub async fn filter_message_async(&mut self, f: impl AsyncFnOnce(&Vec<ReceiveSegment>) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.message).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_message_async(
+		mut self,
+		f: impl AsyncFnOnce(&Vec<ReceiveSegment>) -> bool,
+	) -> Self {
+		self.filter_message_async(f).await;
+		self
+	}
+
+	pub fn filter_raw_message(&mut self, f: impl FnOnce(&str) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.raw_message)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_raw_message(mut self, f: impl FnOnce(&str) -> bool) -> Self {
+		self.filter_raw_message(f);
+		self
+	}
+
+	pub async fn filter_raw_message_async(&mut self, f: impl AsyncFnOnce(&str) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.raw_message).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_raw_message_async(mut self, f: impl AsyncFnOnce(&str) -> bool) -> Self {
+		self.filter_raw_message_async(f).await;
+		self
+	}
+
+	pub fn filter_font(&mut self, f: impl FnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.font)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_font(mut self, f: impl FnOnce(i32) -> bool) -> Self {
+		self.filter_font(f);
+		self
+	}
+
+	pub async fn filter_font_async(&mut self, f: impl AsyncFnOnce(i32) -> bool) {
+		if let Some(data) = self.data
+			&& !f(data.font).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_font_async(mut self, f: impl AsyncFnOnce(i32) -> bool) -> Self {
+		self.filter_font_async(f).await;
+		self
+	}
+
+	pub fn filter_sender(&mut self, f: impl FnOnce(&GroupMessageSender) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.sender)
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_filter_sender(mut self, f: impl FnOnce(&GroupMessageSender) -> bool) -> Self {
+		self.filter_sender(f);
+		self
+	}
+
+	pub async fn filter_sender_async(&mut self, f: impl AsyncFnOnce(&GroupMessageSender) -> bool) {
+		if let Some(data) = self.data
+			&& !f(&data.sender).await
+		{
+			self.data = None
+		}
+	}
+
+	pub async fn and_filter_sender_async(
+		mut self,
+		f: impl AsyncFnOnce(&GroupMessageSender) -> bool,
+	) -> Self {
+		self.filter_sender_async(f).await;
+		self
+	}
+
+	pub fn normal(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_normal()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_normal(mut self) -> Self {
+		self.normal();
+		self
+	}
+
+	pub fn not_normal(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_normal()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_normal(mut self) -> Self {
+		self.not_normal();
+		self
+	}
+
+	pub fn anonymous(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_anonymous()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_anonymous(mut self) -> Self {
+		self.anonymous();
+		self
+	}
+
+	pub fn not_anonymous(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_anonymous()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_anonymous(mut self) -> Self {
+		self.not_anonymous();
+		self
+	}
+
+	pub fn notice(&mut self) {
+		if let Some(data) = self.data
+			&& !data.sub_type.is_notice()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_notice(mut self) -> Self {
+		self.notice();
+		self
+	}
+
+	pub fn not_notice(&mut self) {
+		if let Some(data) = self.data
+			&& data.sub_type.is_notice()
+		{
+			self.data = None
+		}
+	}
+
+	pub fn and_not_notice(mut self) -> Self {
+		self.not_notice();
+		self
+	}
 }
 
 #[cfg(feature = "quick_operation")]
@@ -193,6 +872,11 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for MessageEvent {
 }
 
 impl MessageEvent {
+	#[cfg(feature = "selector")]
+	pub fn selector(&'_ self) -> Selector<'_, Self> {
+		Selector { data: Some(self) }
+	}
+
 	pub fn match_private(&self) -> Option<&MessageEventPrivate> {
 		if let Self::Private(data) = self {
 			Some(data)
@@ -244,6 +928,21 @@ impl MessageEvent {
 			Some(handler(data).await)
 		} else {
 			None
+		}
+	}
+}
+
+#[cfg(feature = "selector")]
+impl<'a> Selector<'a, MessageEvent> {
+	pub fn private(&self) -> Selector<'a, MessageEventPrivate> {
+		Selector {
+			data: self.data.and_then(|d| d.match_private()),
+		}
+	}
+
+	pub fn group(&self) -> Selector<'a, MessageEventGroup> {
+		Selector {
+			data: self.data.and_then(|d| d.match_group()),
 		}
 	}
 }
