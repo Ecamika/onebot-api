@@ -3,7 +3,6 @@ use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use reqwest::IntoUrl;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -23,9 +22,10 @@ pub struct WsServiceBuilder {
 }
 
 impl WsServiceBuilder {
-	pub fn new(url: impl IntoUrl) -> reqwest::Result<Self> {
+	pub fn new(url: &str) -> Result<Self, url::ParseError> {
+		let url = Url::parse(url)?;
 		Ok(Self {
-			url: url.into_url()?,
+			url,
 			access_token: None,
 			auto_reconnect: None,
 			reconnect_interval: None,
@@ -33,7 +33,17 @@ impl WsServiceBuilder {
 		})
 	}
 
-	pub fn build(self) -> reqwest::Result<WsService> {
+	pub fn new_with_url(url: Url) -> Self {
+		Self {
+			url,
+			access_token: None,
+			auto_reconnect: None,
+			reconnect_interval: None,
+			max_reconnect_times: None,
+		}
+	}
+
+	pub fn build(self) -> WsService {
 		WsService::new_with_options(
 			self.url,
 			self.access_token,
@@ -85,21 +95,21 @@ impl Drop for WsService {
 }
 
 impl WsService {
-	pub fn new(url: impl IntoUrl, access_token: Option<String>) -> reqwest::Result<Self> {
+	pub fn new(url: Url, access_token: Option<String>) -> Self {
 		Self::new_with_options(url, access_token, None, None, None)
 	}
 
 	pub fn new_with_options(
-		url: impl IntoUrl,
+		url: Url,
 		access_token: Option<String>,
 		auto_reconnect: Option<bool>,
 		reconnect_interval: Option<Duration>,
 		max_reconnect_times: Option<u32>,
-	) -> reqwest::Result<Self> {
+	) -> Self {
 		let (close_signal_sender, _) = broadcast::channel(1);
 		let (connection_close_signal_sender, _) = broadcast::channel(1);
-		Ok(Self {
-			url: url.into_url()?,
+		Self {
+			url,
 			access_token,
 			api_receiver: None,
 			event_sender: None,
@@ -109,10 +119,10 @@ impl WsService {
 			reconnect_interval: reconnect_interval.unwrap_or(Duration::from_secs(10)),
 			max_reconnect_times: max_reconnect_times.unwrap_or(5),
 			is_running: Arc::new(AtomicBool::new(false)),
-		})
+		}
 	}
 
-	pub fn builder(url: impl IntoUrl) -> reqwest::Result<WsServiceBuilder> {
+	pub fn builder(url: &str) -> Result<WsServiceBuilder, url::ParseError> {
 		WsServiceBuilder::new(url)
 	}
 }
