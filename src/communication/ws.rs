@@ -1,5 +1,6 @@
 use super::utils::*;
 use crate::error::{ServiceStartError, ServiceStartResult};
+use anyhow::Context;
 use async_trait::async_trait;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
@@ -149,7 +150,7 @@ impl WsService {
 					if str.is_err() {
 						continue
 					}
-					let _ = send_side.send(Message::Text(str?.into())).await;
+					send_side.send(Message::Text(str?.into())).await.context("ws send")?;
 				}
 			}
 		}
@@ -164,9 +165,9 @@ impl WsService {
 		loop {
 			select! {
 				_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-				Some(Ok(msg)) = read_side.next() => {
+				msg = read_side.next() => {
 					match msg {
-						Message::Text(data) => {
+						Some(Ok(Message::Text(data))) => {
 							let str = data.as_str();
 							let event = serde_json::from_str::<DeserializedEvent>(str);
 							if event.is_err() {
@@ -174,11 +175,15 @@ impl WsService {
 							}
 							let _ = event_sender.send(event?);
 						},
-						Message::Close(_) => {
+						Some(Ok(Message::Close(_) )) | None => {
 							let _ = connection_close_signal_sender.send(());
 							return Err(anyhow::anyhow!("close"));
 						},
-						_ => ()
+						Some(Err(_)) => {
+							let _ = connection_close_signal_sender.send(());
+							return Err(anyhow::anyhow!("ws read"));
+						},
+						_ => {}
 					}
 				}
 			}
