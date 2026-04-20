@@ -114,7 +114,9 @@ impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> WsTransfer<'a, 'b, S> {
 			}
 		}
 	}
+}
 
+impl<'a, 'b, S> WsTransfer<'a, 'b, S> {
 	pub fn initiate_close(&mut self) {
 		if self.upload_state != UploadState::ClosedByLocal {
 			self.upload_state = UploadState::ClosingByLocal;
