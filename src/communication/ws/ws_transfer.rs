@@ -3,8 +3,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
 use flume::r#async::RecvStream;
-use futures::future::FusedFuture;
-use futures::stream::FusedStream;
 use futures::{Sink, Stream};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_tungstenite::WebSocketStream;
@@ -129,11 +127,5 @@ impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> Future for WsTransfer<'a, 'b, S>
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
 		self.poll_progress(cx)
-	}
-}
-
-impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> FusedFuture for WsTransfer<'a, 'b, S> {
-	fn is_terminated(&self) -> bool {
-		self.ws.is_terminated()
 	}
 }
