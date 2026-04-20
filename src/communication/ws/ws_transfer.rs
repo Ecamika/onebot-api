@@ -46,8 +46,9 @@ impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> WsTransfer<'a, 'b, S> {
 
 	fn poll_upload_one_event(&mut self, cx: &mut Context<'_>) -> Poll<WebSocketResult<()>> {
 		let mut ws = Pin::new(&mut self.ws);
-		ready!(dbg!(ws.as_mut().poll_ready(cx)?));
-		match ready!(dbg!(Pin::new(&mut self.api_stream).poll_next(cx))) {
+		ready!(ws.as_mut().poll_ready(cx)?);
+		let api_stream = Pin::new(&mut self.api_stream);
+		match ready!(api_stream.poll_next(cx)) {
 			Some(event) => {
 				let Ok(msg) = serde_json::to_string(&event) else {
 					return Poll::Ready(Ok(()));
@@ -69,15 +70,15 @@ impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> WsTransfer<'a, 'b, S> {
 
 	fn poll_progress(&mut self, cx: &mut Context<'_>) -> Poll<WebSocketResult<ControlFlow<()>>> {
 		loop {
-			let mut ws = Pin::new(&mut self.ws);
-			match dbg!(self.upload_state) {
+			let ws = Pin::new(&mut self.ws);
+			match self.upload_state {
 				UploadState::AwaitingEvent => {
 					if self.poll_upload_one_event(cx)?.is_ready() {
 						continue;
 					}
 				}
 				UploadState::Flushing => {
-					if ws.as_mut().poll_flush(cx)?.is_ready() {
+					if ws.poll_flush(cx)?.is_ready() {
 						self.upload_state = UploadState::AwaitingEvent;
 						continue;
 					}
@@ -96,12 +97,13 @@ impl<'a, 'b, S: AsyncRead + AsyncWrite + Unpin> WsTransfer<'a, 'b, S> {
 					Some(Ok(_)) => continue,
 				},
 				UploadState::ClosedByPeer => {
-					ready!(ws.as_mut().poll_close(cx)?);
+					ready!(ws.poll_close(cx)?);
 					return Poll::Ready(Ok(ControlFlow::Continue(())));
 				}
 			}
 
-			match ready!(dbg!(Pin::new(&mut self.ws).poll_next(cx))) {
+			let ws = Pin::new(&mut self.ws);
+			match ready!(ws.poll_next(cx)) {
 				Some(Ok(Message::Text(msg))) => {
 					let Ok(event) = serde_json::from_str::<DeserializedEvent>(msg.as_str()) else {
 						continue;

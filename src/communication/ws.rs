@@ -165,7 +165,7 @@ impl WsService {
 			'handle_connection: loop {
 				let result =
 					Self::handle_connection(&api_receiver, &event_sender, &mut close_signal, ws).await;
-				if let Ok(ControlFlow::Break(())) = dbg!(result) {
+				if let Ok(ControlFlow::Break(())) = result {
 					break;
 				}
 				loop {
