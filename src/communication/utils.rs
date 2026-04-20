@@ -492,6 +492,7 @@ impl Client {
 		{
 			let echo = echo.clone();
 			let mut registry = self.api_request_registry.lock().unwrap();
+			dbg!(registry.len());
 			registry.insert(echo, response_tx);
 		}
 
@@ -510,15 +511,17 @@ impl Client {
 			registry: &self.api_request_registry,
 		};
 
-		self
-			.internal_api_sender
-			.send_async(APIRequest {
-				action,
-				params,
-				echo: Some(echo),
-			})
-			.await?;
-		let response_future = async { response_rx.await.ok() };
+		dbg!(
+			self
+				.internal_api_sender
+				.send_async(APIRequest {
+					action,
+					params,
+					echo: Some(echo),
+				})
+				.await
+		)?;
+		let response_future = async { dbg!(response_rx.await.ok()) };
 		if let Some(timeout) = self.timeout {
 			tokio::time::timeout(timeout, response_future)
 				.await
