@@ -3,11 +3,9 @@ use crate::event::{meta::MetaEvent, notice::NoticeEvent, request::RequestEvent};
 #[cfg(feature = "selector")]
 use crate::selector::Selector;
 
-use async_trait::async_trait;
 use message::MessageEvent;
 use serde::Deserialize;
 use strum::{Display, EnumIs};
-use tokio::sync::broadcast;
 
 pub mod message;
 pub mod meta;
@@ -699,8 +697,3 @@ impl<'a> Selector<'a, Event> {
 pub trait EventTrait {}
 
 impl EventTrait for Event {}
-
-#[async_trait]
-pub trait EventReceiver<T: EventTrait> {
-	fn subscribe(&self) -> broadcast::Receiver<T>;
-}

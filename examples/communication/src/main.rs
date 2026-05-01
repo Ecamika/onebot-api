@@ -37,8 +37,10 @@ fn sse() -> Client {
 }
 
 fn websocket() -> Client {
-	let ws_service =
-		WsService::new("ws://localhost:8000", Some("example_token".to_string())).unwrap();
+	let ws_service = WsService::new(
+		"ws://localhost:8000".parse().unwrap(),
+		Some("example_token".to_string()),
+	);
 	Client::new(ws_service)
 }
 

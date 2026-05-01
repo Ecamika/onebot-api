@@ -3,7 +3,6 @@ use crate::api::arg_type::MessageType;
 use crate::api::return_type::*;
 use crate::error::{APIRequestError, APIResult, ServiceRuntimeError, ServiceStartResult};
 pub use crate::event::Event as NormalEvent;
-use crate::event::EventReceiver as EventReceiverTrait;
 use crate::event::EventTrait;
 use crate::event::message::GroupMessageAnonymous;
 use crate::message::receive_segment::ReceiveSegment;
@@ -43,34 +42,27 @@ pub type InternalEventReceiver = FlumeReceiver<DeserializedEvent>;
 /// `Client` 与具体 `RawEventProcessor` 中  
 /// API响应的发送通道  
 /// 应由 `Client` 持有
-type InternalAPIResponseSender = tokio::sync::oneshot::Sender<Arc<APIResponse>>;
-
-/// `Client` 与具体使用者之间  
-/// API响应的发送通道  
-/// 应由 `Client` 持有
-pub type PublicAPIResponseSender = BroadcastSender<ArcAPIResponse>;
+type InternalAPIResponseSender = tokio::sync::oneshot::Sender<APIResponse>;
 
 /// `Client` 与具体使用者之间  
 /// 事件（除去API响应）的发送通道  
 /// 应由 `Client` 持有
-pub type PublicEventSender = BroadcastSender<ArcNormalEvent>;
+pub type PublicEventSender = FlumeSender<NormalEvent>;
 /// `Client` 与具体使用者之间  
 /// 事件（除去API响应）的接收通道  
 /// 公开，任何人都可持有
-pub type PublicEventReceiver = BroadcastReceiver<ArcNormalEvent>;
+pub type PublicEventReceiver = FlumeReceiver<NormalEvent>;
 
 pub type ServiceRuntimeResult<T> = Result<T, ServiceRuntimeError>;
 
-pub type ArcServiceRuntimeError = Arc<ServiceRuntimeError>;
-pub type ArcAPIResponse = Arc<APIResponse>;
+// pub type ArcServiceRuntimeError = Arc<ServiceRuntimeError>;
 type ArcAPIRequestRegistry = Arc<Mutex<BTreeMap<String, InternalAPIResponseSender>>>;
-pub type ArcNormalEvent = Arc<NormalEvent>;
+// pub type ArcNormalEvent = Arc<NormalEvent>;
 
 pub const DEFAULT_CHANNEL_CAP: usize = 16;
 
 impl EventTrait for APIResponse {}
-impl EventTrait for ArcAPIResponse {}
-impl EventTrait for ArcNormalEvent {}
+// impl EventTrait for ArcNormalEvent {}
 
 #[derive(Deserialize, Clone, Debug, EnumIs)]
 #[serde(untagged)]
@@ -193,7 +185,8 @@ pub struct Client {
 	internal_event_sender: InternalEventSender,
 	// internal_event_receiver: InternalEventReceiver,
 	api_request_registry: ArcAPIRequestRegistry,
-	public_event_sender: PublicEventSender,
+	// public_event_sender: PublicEventSender,
+	public_event_receiver: PublicEventReceiver,
 	timeout: Option<Duration>,
 	echo_generator: Box<dyn Fn() -> String + Send + Sync>,
 	close_signal_sender: broadcast::Sender<()>,
@@ -282,14 +275,8 @@ impl Drop for Client {
 }
 
 impl Client {
-	pub fn subscribe_normal_event(&self) -> PublicEventReceiver {
-		self.public_event_sender.subscribe()
-	}
-}
-
-impl EventReceiverTrait<ArcNormalEvent> for Client {
-	fn subscribe(&self) -> PublicEventReceiver {
-		self.subscribe_normal_event()
+	pub fn get_normal_event_receiver(&self) -> PublicEventReceiver {
+		self.public_event_receiver.clone()
 	}
 }
 
@@ -324,7 +311,8 @@ impl Client {
 			flume::bounded(get_cap(internal_api_channel_cap));
 		let (internal_event_sender, internal_event_receiver) =
 			flume::bounded(get_cap(internal_event_channel_cap));
-		let (public_event_sender, _) = broadcast::channel(get_cap(public_event_channel_cap));
+		let (public_event_sender, public_event_receiver) =
+			flume::bounded(get_cap(public_event_channel_cap));
 		service.install(internal_api_receiver.clone(), internal_event_sender.clone());
 
 		let (close_signal_sender, _) = broadcast::channel(1);
@@ -344,7 +332,8 @@ impl Client {
 			internal_api_sender,
 			// internal_event_receiver,
 			internal_event_sender,
-			public_event_sender,
+			// public_event_sender,
+			public_event_receiver,
 			echo_generator: echo_generator.unwrap_or(Box::new(Self::generate_id)),
 			close_signal_sender,
 			api_request_registry,
@@ -398,14 +387,14 @@ impl Client {
 							}) else {
 								continue
 							};
-							response_channel.send(Arc::new(v)).ok();
+							response_channel.send(v).ok();
 						},
 						Ok(DeserializedEvent::Event(v)) => {
 							let v = serde_json::from_value(v);
 							if v.is_err() {
 								continue
 							}
-							let _ = public_event_sender.send(Arc::new(v?));
+							let _ = public_event_sender.send_async(v?).await;
 						},
 						Err(_) => return Err(anyhow::anyhow!("internal event channel closed")),
 					}
@@ -478,7 +467,7 @@ impl Client {
 		uuid::Uuid::new_v4().to_string()
 	}
 
-	pub fn parse_response<T: DeserializeOwned>(response: ArcAPIResponse) -> APIResult<T> {
+	pub fn parse_response<T: DeserializeOwned>(response: APIResponse) -> APIResult<T> {
 		response.parse_data()
 	}
 
@@ -487,7 +476,7 @@ impl Client {
 		action: String,
 		params: JsonValue,
 		echo: String,
-	) -> APIResult<ArcAPIResponse> {
+	) -> APIResult<APIResponse> {
 		let (response_tx, response_rx) = tokio::sync::oneshot::channel();
 		{
 			let echo = echo.clone();
