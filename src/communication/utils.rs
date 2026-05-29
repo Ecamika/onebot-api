@@ -14,13 +14,13 @@ use onebot_api_macros::api_sender;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tokio::task::JoinHandle;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strum::EnumIs;
 pub use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 pub use tokio::sync::broadcast::Sender as BroadcastSender;
+use tokio::task::JoinHandle;
 
 /// `Client` 与具体 `CommunicationService` 中  
 /// API请求的发送通道  
@@ -117,16 +117,16 @@ pub trait CommunicationService: Sync + Send {
 	/// 停止服务  
 	/// 不同于 `uninstall` 方法 ，`stop` 方法仅需要回收安装后产生的副作用，并不需要回收安装时注入的依赖  
 	/// **应具备幂等性**
-	fn stop(&self);
+	fn stop(&mut self);
 
 	/// 开始服务  
 	/// 服务内应保证任务在服务的生命周期内最多存在一个  
 	/// 由于在服务生命周期内最多存在一个任务，所以该方法 **应具备幂等性**
-	async fn start(&self) -> ServiceStartResult<()>;
+	async fn start(&mut self) -> ServiceStartResult<()>;
 
 	/// 重启服务  
 	/// **不具备幂等性**
-	async fn restart(&self) -> ServiceStartResult<()> {
+	async fn restart(&mut self) -> ServiceStartResult<()> {
 		self.stop();
 		self.start().await
 	}
@@ -142,15 +142,15 @@ impl CommunicationService for Box<dyn CommunicationService> {
 		(**self).uninstall();
 	}
 
-	fn stop(&self) {
+	fn stop(&mut self) {
 		(**self).stop();
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		(**self).start().await
 	}
 
-	async fn restart(&self) -> ServiceStartResult<()> {
+	async fn restart(&mut self) -> ServiceStartResult<()> {
 		(**self).restart().await
 	}
 }
@@ -189,7 +189,7 @@ pub struct Client {
 	public_event_receiver: PublicEventReceiver,
 	timeout: Option<Duration>,
 	echo_generator: Box<dyn Fn() -> String + Send + Sync>,
-	processor_handle: JoinHandle<anyhow::Result<()>>
+	processor_handle: JoinHandle<anyhow::Result<()>>,
 }
 
 pub struct ClientBuilder {
@@ -382,14 +382,14 @@ impl Client {
 						continue;
 					};
 					response_channel.send(v).ok();
-				},
+				}
 				Ok(DeserializedEvent::Event(v)) => {
 					let v = serde_json::from_value(v);
 					if v.is_err() {
-						continue
+						continue;
 					}
 					let _ = public_event_sender.send_async(v?).await;
-				},
+				}
 				Err(_) => return Err(anyhow::anyhow!("internal event channel closed")),
 			}
 		}
@@ -397,15 +397,15 @@ impl Client {
 
 	/// 启动服务  
 	/// 在 `Client` 实例构造完成或调用 `change_service` 后都需要调用该方法启动服务
-	pub async fn start_service(&self) -> ServiceStartResult<()> {
+	pub async fn start_service(&mut self) -> ServiceStartResult<()> {
 		self.service.start().await
 	}
 
-	pub fn stop_service(&self) {
+	pub fn stop_service(&mut self) {
 		self.service.stop();
 	}
 
-	pub async fn restart_service(&self) -> ServiceStartResult<()> {
+	pub async fn restart_service(&mut self) -> ServiceStartResult<()> {
 		self.service.restart().await
 	}
 

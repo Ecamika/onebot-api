@@ -11,15 +11,16 @@ use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use http::{HeaderMap, StatusCode};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio::select;
-use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 
 pub struct WsReverseService<T: ToSocketAddrs + Clone + Send + Sync> {
 	api_receiver: Option<InternalAPIReceiver>,
 	event_sender: Option<InternalEventSender>,
-	close_signal_sender: broadcast::Sender<()>,
+	serve_handle: Option<JoinHandle<()>>,
+	app_state: Option<Arc<AppState>>,
 	access_token: Option<String>,
 	addr: T,
 	is_running: Arc<AtomicBool>,
@@ -33,11 +34,11 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> Drop for WsReverseService<T> {
 
 impl<T: ToSocketAddrs + Clone + Send + Sync> WsReverseService<T> {
 	pub fn new(addr: T, access_token: Option<String>) -> Self {
-		let (close_signal_sender, _) = broadcast::channel(1);
 		Self {
 			api_receiver: None,
 			event_sender: None,
-			close_signal_sender,
+			serve_handle: None,
+			app_state: None,
 			access_token,
 			addr,
 			is_running: Arc::new(AtomicBool::new(false)),
@@ -49,27 +50,24 @@ struct AppState {
 	access_token: Option<String>,
 	api_receiver: InternalAPIReceiver,
 	event_sender: InternalEventSender,
-	close_signal_sender: broadcast::Sender<()>,
 	connected: Arc<AtomicBool>,
+	connection_handle: Arc<Mutex<Option<JoinHandle<anyhow::Result<()>>>>>,
 }
 
 async fn send_processor(
 	mut send_side: SplitSink<WebSocket, Message>,
 	api_receiver: InternalAPIReceiver,
-	mut close_signal: broadcast::Receiver<()>,
-	mut connection_close_signal: broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
 	loop {
-		select! {
-			_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-			_ = connection_close_signal.recv() => return Err(anyhow::anyhow!("close")),
-			Ok(data) = api_receiver.recv_async() => {
+		match api_receiver.recv_async().await {
+			Ok(data) => {
 				let str = serde_json::to_string(&data);
 				if str.is_err() {
-					continue
+					continue;
 				}
 				let _ = send_side.send(Message::Text(str?.into())).await;
 			}
+			Err(_) => return Err(anyhow::anyhow!("api receiver closed")),
 		}
 	}
 }
@@ -77,31 +75,25 @@ async fn send_processor(
 async fn read_processor(
 	mut read_side: SplitStream<WebSocket>,
 	event_sender: InternalEventSender,
-	mut close_signal: broadcast::Receiver<()>,
-	connection_close_signal_sender: broadcast::Sender<()>,
-	connected: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
 	loop {
-		select! {
-			_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-			Some(Ok(msg)) = read_side.next() => {
-				match msg {
-					Message::Text(data) => {
-						let str = data.as_str();
-						let event = serde_json::from_str::<DeserializedEvent>(str);
-						if event.is_err() {
-							continue
-						}
-						let _ = event_sender.send_async(event?).await;
-					},
-					Message::Close(_) => {
-						let _ = connection_close_signal_sender.send(());
-						connected.store(false, Ordering::Relaxed);
-						return Err(anyhow::anyhow!("close"));
-					},
-					_ => ()
+		match read_side.next().await {
+			Some(Ok(msg)) => match msg {
+				Message::Text(data) => {
+					let str = data.as_str();
+					let event = serde_json::from_str::<DeserializedEvent>(str);
+					if event.is_err() {
+						continue;
+					}
+					let _ = event_sender.send_async(event?).await;
 				}
-			}
+				Message::Close(_) => {
+					return Err(anyhow::anyhow!("websocket closed by peer"));
+				}
+				_ => (),
+			},
+			Some(Err(_)) => return Err(anyhow::anyhow!("websocket error")),
+			None => return Err(anyhow::anyhow!("websocket stream ended")),
 		}
 	}
 }
@@ -136,25 +128,16 @@ async fn handler(
 	}
 	ws.on_upgrade(async move |socket: WebSocket| {
 		let (send_side, read_side) = socket.split();
-		let (connection_close_signal_sender, connection_close_signal) = broadcast::channel(1);
 		let api_receiver = state.api_receiver.clone();
 		let event_sender = state.event_sender.clone();
 		state.connected.store(true, Ordering::Relaxed);
-		let send_task = tokio::spawn(send_processor(
-			send_side,
-			api_receiver,
-			state.close_signal_sender.subscribe(),
-			connection_close_signal,
-		));
-		let read_task = tokio::spawn(read_processor(
-			read_side,
-			event_sender,
-			state.close_signal_sender.subscribe(),
-			connection_close_signal_sender,
-			Arc::clone(&state.connected),
-		));
-		let (r1, r2) = futures::try_join!(send_task, read_task).unwrap();
-		r1.and(r2).unwrap();
+		let handle = tokio::spawn(async move {
+			tokio::select! {
+				r = send_processor(send_side, api_receiver) => r,
+				r = read_processor(read_side, event_sender) => r,
+			}
+		});
+		*state.connection_handle.lock().unwrap() = Some(handle);
 	})
 }
 
@@ -171,12 +154,19 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for WsReverseS
 		self.event_sender = None;
 	}
 
-	fn stop(&self) {
-		let _ = self.close_signal_sender.send(());
+	fn stop(&mut self) {
+		if let Some(state) = self.app_state.as_ref()
+			&& let Some(handle) = state.connection_handle.lock().unwrap().take()
+		{
+			handle.abort();
+		}
+		if let Some(handle) = self.serve_handle.take() {
+			handle.abort();
+		}
 		self.is_running.store(false, Ordering::Relaxed);
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		if self.is_running.load(Ordering::Relaxed) {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
@@ -196,22 +186,18 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for WsReverseS
 			access_token: self.access_token.clone(),
 			api_receiver,
 			event_sender,
-			close_signal_sender: self.close_signal_sender.clone(),
 			connected: Arc::new(AtomicBool::new(false)),
+			connection_handle: Arc::new(Mutex::new(None)),
 		});
+		self.app_state = Some(state.clone());
 
 		let listener = TcpListener::bind(self.addr.clone()).await?;
 		let router = Router::new().fallback(any(handler)).with_state(state);
-		let mut close_signal = self.close_signal_sender.subscribe();
 
 		self.is_running.store(true, Ordering::Relaxed);
-		tokio::spawn(
-			axum::serve(listener, router)
-				.with_graceful_shutdown(async move {
-					let _ = close_signal.recv().await;
-				})
-				.into_future(),
-		);
+		self.serve_handle = Some(tokio::spawn(async move {
+			axum::serve(listener, router).await.ok();
+		}));
 
 		Ok(())
 	}

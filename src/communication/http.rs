@@ -6,18 +6,30 @@ use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::select;
-use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 use url::Url;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct HttpService {
 	url: Url,
 	access_token: Option<String>,
 	api_receiver: Option<InternalAPIReceiver>,
 	event_sender: Option<InternalEventSender>,
-	close_signal_sender: broadcast::Sender<()>,
+	task_handle: Option<JoinHandle<()>>,
 	is_running: Arc<AtomicBool>,
+}
+
+impl Clone for HttpService {
+	fn clone(&self) -> Self {
+		Self {
+			url: self.url.clone(),
+			access_token: self.access_token.clone(),
+			api_receiver: self.api_receiver.clone(),
+			event_sender: self.event_sender.clone(),
+			task_handle: None,
+			is_running: self.is_running.clone(),
+		}
+	}
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -29,37 +41,35 @@ pub struct HttpResponse {
 
 impl HttpService {
 	pub fn new(url: impl IntoUrl, access_token: Option<String>) -> reqwest::Result<Self> {
-		let (close_signal_sender, _) = broadcast::channel(1);
 		Ok(Self {
 			url: url.into_url()?,
 			access_token,
 			api_receiver: None,
 			event_sender: None,
-			close_signal_sender,
+			task_handle: None,
 			is_running: Arc::new(AtomicBool::new(false)),
 		})
 	}
 
 	async fn api_processor(self) -> anyhow::Result<()> {
-		let mut close_signal = self.close_signal_sender.subscribe();
 		let api_receiver = self.api_receiver.clone().unwrap();
 		let event_sender = self.event_sender.clone().unwrap();
 		let client = reqwest::Client::new();
 
 		loop {
-			select! {
-				_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-				Ok(data) = api_receiver.recv_async() => {
+			match api_receiver.recv_async().await {
+				Ok(data) => {
 					let response = self.send_api_request(&client, &data).await;
 					if response.is_err() {
-						continue
+						continue;
 					}
 					let event = self.response_parser(data.echo, response?).await;
 					if event.is_err() {
-						continue
+						continue;
 					}
 					let _ = event_sender.send_async(event?).await;
 				}
+				Err(_) => return Err(anyhow::anyhow!("api receiver closed")),
 			}
 		}
 	}
@@ -132,12 +142,14 @@ impl CommunicationService for HttpService {
 		self.event_sender = None;
 	}
 
-	fn stop(&self) {
-		let _ = self.close_signal_sender.send(());
+	fn stop(&mut self) {
+		if let Some(handle) = self.task_handle.take() {
+			handle.abort();
+		}
 		self.is_running.store(false, Ordering::Relaxed);
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		if self.is_running.load(Ordering::Relaxed) {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
@@ -151,7 +163,10 @@ impl CommunicationService for HttpService {
 		}
 
 		self.is_running.store(true, Ordering::Relaxed);
-		tokio::spawn(Self::api_processor(self.clone()));
+		let service = self.clone();
+		self.task_handle = Some(tokio::spawn(async move {
+			service.api_processor().await.ok();
+		}));
 
 		Ok(())
 	}

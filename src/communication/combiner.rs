@@ -1,10 +1,9 @@
 use crate::communication::utils::*;
 use crate::error::{ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
-use tokio::select;
-use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 
-/// 将事件接收与API发送分为两个不同服务实现  
+/// 将事件接收与API发送分为两个不同服务实现
 /// 服务分为 `send_side` 与 `read_side`  
 /// 其中，`send_side` 负责API发送服务，`read_side` 负责事件接收服务  
 /// `send_side` 的事件通道由一个 processor task 负责  
@@ -29,7 +28,7 @@ pub struct SplitCombiner<S: CommunicationService, R: CommunicationService> {
 	event_process_sender: InternalEventSender,
 	event_process_receiver: InternalEventReceiver,
 	event_sender: Option<InternalEventSender>,
-	close_signal_sender: broadcast::Sender<()>,
+	task_handle: Option<JoinHandle<()>>,
 }
 
 impl<S: CommunicationService, R: CommunicationService> Drop for SplitCombiner<S, R> {
@@ -41,14 +40,13 @@ impl<S: CommunicationService, R: CommunicationService> Drop for SplitCombiner<S,
 impl<S: CommunicationService, R: CommunicationService> SplitCombiner<S, R> {
 	pub fn new(send_side: S, read_side: R) -> Self {
 		let (event_process_sender, event_process_receiver) = flume::bounded(16);
-		let (close_signal_sender, _) = broadcast::channel(1);
 		Self {
 			send_side,
 			read_side,
 			event_process_sender,
 			event_process_receiver,
 			event_sender: None,
-			close_signal_sender,
+			task_handle: None,
 		}
 	}
 }
@@ -75,26 +73,27 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		self.event_sender = None;
 	}
 
-	fn stop(&self) {
-		let _ = self.close_signal_sender.send(());
+	fn stop(&mut self) {
+		if let Some(handle) = self.task_handle.take() {
+			handle.abort();
+		}
 		self.send_side.stop();
 		self.read_side.stop();
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		async fn processor(
-			mut close_signal: broadcast::Receiver<()>,
 			event_process_receiver: InternalEventReceiver,
 			event_sender: InternalEventSender,
 		) -> anyhow::Result<()> {
 			loop {
-				select! {
-					_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-					Ok(data) = event_process_receiver.recv_async() => {
+				match event_process_receiver.recv_async().await {
+					Ok(data) => {
 						if data.is_api_response() {
 							let _ = event_sender.send(data);
 						}
 					}
+					Err(_) => return Err(anyhow::anyhow!("event process channel closed")),
 				}
 			}
 		}
@@ -103,18 +102,17 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 		let event_sender = self.event_sender.clone().unwrap();
+		let event_process_receiver = self.event_process_receiver.clone();
 
-		tokio::spawn(processor(
-			self.close_signal_sender.subscribe(),
-			self.event_process_receiver.clone(),
-			event_sender,
-		));
+		self.task_handle = Some(tokio::spawn(async move {
+			processor(event_process_receiver, event_sender).await.ok();
+		}));
 
 		futures::try_join!(self.send_side.start(), self.read_side.start())?;
 		Ok(())
 	}
 
-	async fn restart(&self) -> ServiceStartResult<()> {
+	async fn restart(&mut self) -> ServiceStartResult<()> {
 		futures::try_join!(self.send_side.restart(), self.read_side.restart())?;
 		Ok(())
 	}
@@ -157,17 +155,17 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		self.read_side.uninstall();
 	}
 
-	fn stop(&self) {
+	fn stop(&mut self) {
 		self.send_side.stop();
 		self.read_side.stop();
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		futures::try_join!(self.send_side.start(), self.read_side.start())?;
 		Ok(())
 	}
 
-	async fn restart(&self) -> ServiceStartResult<()> {
+	async fn restart(&mut self) -> ServiceStartResult<()> {
 		futures::try_join!(self.send_side.restart(), self.read_side.restart())?;
 		Ok(())
 	}

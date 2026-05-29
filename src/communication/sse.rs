@@ -7,20 +7,31 @@ use futures::{Stream, StreamExt};
 use reqwest::IntoUrl;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::select;
-use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 use url::Url;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SseService {
 	url: Url,
 	access_token: Option<String>,
 	event_sender: Option<InternalEventSender>,
-	close_signal_sender: broadcast::Sender<()>,
+	task_handle: Option<JoinHandle<()>>,
 	is_running: Arc<AtomicBool>,
 	// auto_reconnect: bool,
 	// reconnect_interval: Duration,
 	// reconnect_signal_sender: broadcast::Sender<()>
+}
+
+impl Clone for SseService {
+	fn clone(&self) -> Self {
+		Self {
+			url: self.url.clone(),
+			access_token: self.access_token.clone(),
+			event_sender: self.event_sender.clone(),
+			task_handle: None,
+			is_running: self.is_running.clone(),
+		}
+	}
 }
 
 impl Drop for SseService {
@@ -36,13 +47,11 @@ impl SseService {
 		// auto_reconnect: Option<bool>,
 		// reconnect_interval: Option<Duration>,
 	) -> reqwest::Result<Self> {
-		let (close_signal_sender, _) = broadcast::channel(1);
-		// let (reconnect_signal_sender, _) = broadcast::channel(1);
 		Ok(Self {
 			url: url.into_url()?,
 			access_token,
 			event_sender: None,
-			close_signal_sender,
+			task_handle: None,
 			is_running: Arc::new(AtomicBool::new(false)),
 			// auto_reconnect: auto_reconnect.unwrap_or(true),
 			// reconnect_interval: reconnect_interval.unwrap_or(Duration::from_secs(10)),
@@ -63,21 +72,18 @@ impl SseService {
 	}
 
 	async fn eventsource_listener(self) -> anyhow::Result<()> {
-		let mut close_signal = self.close_signal_sender.subscribe();
 		let mut es = self.eventsource().await?;
 		let event_sender = self.event_sender.clone().unwrap();
 		loop {
-			select! {
-				_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-				event_option = es.next() => {
-					if let Some(Ok(es_event)) = event_option {
-						let event = serde_json::from_str(&es_event.data);
-						if event.is_err() {
-							continue
-						}
-						let _ = event_sender.send_async(event?).await;
+			match es.next().await {
+				Some(Ok(es_event)) => {
+					let event = serde_json::from_str(&es_event.data);
+					if event.is_err() {
+						continue;
 					}
+					let _ = event_sender.send_async(event?).await;
 				}
+				_ => return Err(anyhow::anyhow!("eventsource ended")),
 			}
 		}
 	}
@@ -108,12 +114,14 @@ impl CommunicationService for SseService {
 		self.event_sender = None;
 	}
 
-	fn stop(&self) {
-		let _ = self.close_signal_sender.send(());
+	fn stop(&mut self) {
+		if let Some(handle) = self.task_handle.take() {
+			handle.abort();
+		}
 		self.is_running.store(false, Ordering::Relaxed);
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		if self.is_running.load(Ordering::Relaxed) {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
@@ -123,7 +131,10 @@ impl CommunicationService for SseService {
 		}
 
 		self.is_running.store(true, Ordering::Relaxed);
-		tokio::spawn(Self::eventsource_listener(self.clone()));
+		let service = self.clone();
+		self.task_handle = Some(tokio::spawn(async move {
+			service.eventsource_listener().await.ok();
+		}));
 
 		Ok(())
 	}

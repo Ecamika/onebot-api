@@ -1,8 +1,11 @@
 # AGENTS.md
 
 ## Project overview
-- Single-crate Rust **library** implementing the OneBot V11 protocol. Not a workspace.
+- Rust **library** implementing the OneBot V11 protocol. Not a workspace.
+- Main crate `onebot-api` (version 1.2.3) with a separate proc-macro crate `onebot-api-macros` in `macros/`.
 - Rust **edition 2024** — requires toolchain >= 1.85.
+- `examples/communication/` contains a usage example.
+- `changelogs/` contains daily change records.
 
 ## Build / check / test
 ```bash
@@ -45,3 +48,12 @@ cargo check --no-default-features --features "websocket,http"
 - The `text!` macro (in `src/message/utils.rs`) creates a single-text-segment message; it delegates to `format!` internally.
 - Error types: `APIRequestError` for API failures, `ServiceStartError` for connection setup failures. Both are in `src/error.rs`.
 - `Selector` (feature-gated behind `selector`) provides chainable event filtering with sync and async variants of each method.
+
+## Changelog rule
+**Whenever any modification is made to the project (any file, any folder, including `src/`, `macros/`, `examples/`, `scripts/`, `.github/`, `AGENTS.md`, etc.), the change MUST be recorded in the `changelogs/` folder.**
+
+Procedure:
+1. Look for a markdown file named with the **current date** (format `YYYY-MM-DD.md`) in `changelogs/`.
+2. If the file exists, append the current change to it.
+3. If the file does not exist, create it and write the change.
+4. Each entry should include: what was changed, which files were affected, and a brief reason or impact.

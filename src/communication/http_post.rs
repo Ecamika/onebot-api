@@ -11,7 +11,7 @@ use sha1::Sha1;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -19,7 +19,7 @@ pub struct HttpPostService<T: ToSocketAddrs + Clone + Send + Sync> {
 	addr: T,
 	hmac: Option<HmacSha1>,
 	event_sender: Option<InternalEventSender>,
-	close_signal_sender: broadcast::Sender<()>,
+	task_handle: Option<JoinHandle<()>>,
 	prefix: String,
 	is_running: Arc<AtomicBool>,
 }
@@ -32,7 +32,6 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> Drop for HttpPostService<T> {
 
 impl<T: ToSocketAddrs + Clone + Send + Sync> HttpPostService<T> {
 	pub fn new(addr: T, prefix: Option<String>, secret: Option<String>) -> anyhow::Result<Self> {
-		let (close_signal_sender, _) = broadcast::channel(1);
 		let hmac = if let Some(secret) = secret {
 			Some(HmacSha1::new_from_slice(secret.as_ref())?)
 		} else {
@@ -46,7 +45,7 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> HttpPostService<T> {
 			addr,
 			hmac,
 			event_sender: None,
-			close_signal_sender,
+			task_handle: None,
 			prefix,
 			is_running: Arc::new(AtomicBool::new(false)),
 		})
@@ -97,12 +96,14 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for HttpPostSe
 		self.event_sender = None;
 	}
 
-	fn stop(&self) {
-		let _ = self.close_signal_sender.send(());
+	fn stop(&mut self) {
+		if let Some(handle) = self.task_handle.take() {
+			handle.abort();
+		}
 		self.is_running.store(false, Ordering::Relaxed);
 	}
 
-	async fn start(&self) -> ServiceStartResult<()> {
+	async fn start(&mut self) -> ServiceStartResult<()> {
 		if self.is_running.load(Ordering::Relaxed) {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
@@ -122,16 +123,11 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for HttpPostSe
 		let router = Router::new()
 			.route(&self.prefix, any(processor))
 			.with_state(state);
-		let mut close_signal = self.close_signal_sender.subscribe();
 
 		self.is_running.store(true, Ordering::Relaxed);
-		tokio::spawn(
-			axum::serve(listener, router)
-				.with_graceful_shutdown(async move {
-					let _ = close_signal.recv().await;
-				})
-				.into_future(),
-		);
+		self.task_handle = Some(tokio::spawn(async move {
+			axum::serve(listener, router).await.ok();
+		}));
 
 		Ok(())
 	}
