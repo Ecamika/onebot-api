@@ -10,15 +10,15 @@ use crate::message::send_segment::SendSegment;
 use async_trait::async_trait;
 pub use flume::Receiver as FlumeReceiver;
 pub use flume::Sender as FlumeSender;
+use onebot_api_macros::api_sender;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue, json};
+use serde_json::Value as JsonValue;
+use tokio::task::JoinHandle;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strum::EnumIs;
-use tokio::select;
-use tokio::sync::broadcast;
 pub use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 pub use tokio::sync::broadcast::Sender as BroadcastSender;
 
@@ -189,7 +189,7 @@ pub struct Client {
 	public_event_receiver: PublicEventReceiver,
 	timeout: Option<Duration>,
 	echo_generator: Box<dyn Fn() -> String + Send + Sync>,
-	close_signal_sender: broadcast::Sender<()>,
+	processor_handle: JoinHandle<anyhow::Result<()>>
 }
 
 pub struct ClientBuilder {
@@ -270,7 +270,7 @@ impl ClientBuilder {
 impl Drop for Client {
 	fn drop(&mut self) {
 		self.service.uninstall();
-		let _ = self.close_signal_sender.send(());
+		self.processor_handle.abort();
 	}
 }
 
@@ -315,11 +315,9 @@ impl Client {
 			flume::bounded(get_cap(public_event_channel_cap));
 		service.install(internal_api_receiver.clone(), internal_event_sender.clone());
 
-		let (close_signal_sender, _) = broadcast::channel(1);
 		let api_request_registry = ArcAPIRequestRegistry::default();
 
-		tokio::spawn(Self::raw_event_processor(
-			close_signal_sender.subscribe(),
+		let processor_handle = tokio::spawn(Self::raw_event_processor(
 			internal_event_receiver.clone(),
 			api_request_registry.clone(),
 			public_event_sender.clone(),
@@ -335,7 +333,7 @@ impl Client {
 			// public_event_sender,
 			public_event_receiver,
 			echo_generator: echo_generator.unwrap_or(Box::new(Self::generate_id)),
-			close_signal_sender,
+			processor_handle,
 			api_request_registry,
 		}
 	}
@@ -370,35 +368,29 @@ impl Client {
 
 impl Client {
 	async fn raw_event_processor(
-		mut close_signal: broadcast::Receiver<()>,
 		internal_event_receiver: InternalEventReceiver,
 		api_request_registry: ArcAPIRequestRegistry,
 		public_event_sender: PublicEventSender,
 	) -> anyhow::Result<()> {
 		loop {
-			select! {
-				_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-				event = internal_event_receiver.recv_async() => {
-					match event {
-						Ok(DeserializedEvent::APIResponse(v)) => {
-							let Some(response_channel) = v.echo.as_ref().and_then(|echo| {
-								let mut registry = api_request_registry.lock().unwrap();
-								registry.remove(echo)
-							}) else {
-								continue
-							};
-							response_channel.send(v).ok();
-						},
-						Ok(DeserializedEvent::Event(v)) => {
-							let v = serde_json::from_value(v);
-							if v.is_err() {
-								continue
-							}
-							let _ = public_event_sender.send_async(v?).await;
-						},
-						Err(_) => return Err(anyhow::anyhow!("internal event channel closed")),
+			match internal_event_receiver.recv_async().await {
+				Ok(DeserializedEvent::APIResponse(v)) => {
+					let Some(response_channel) = v.echo.as_ref().and_then(|echo| {
+						let mut registry = api_request_registry.lock().unwrap();
+						registry.remove(echo)
+					}) else {
+						continue;
+					};
+					response_channel.send(v).ok();
+				},
+				Ok(DeserializedEvent::Event(v)) => {
+					let v = serde_json::from_value(v);
+					if v.is_err() {
+						continue
 					}
-				}
+					let _ = public_event_sender.send_async(v?).await;
+				},
+				Err(_) => return Err(anyhow::anyhow!("internal event channel closed")),
 			}
 		}
 	}
@@ -551,38 +543,28 @@ impl Client {
 
 // APISender START
 
+#[api_sender]
 #[async_trait]
 impl APISenderTrait for Client {
+	#[api(extract = "message_id", response = SendMsgResponse)]
 	async fn send_private_msg(
 		&self,
 		user_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
 	) -> APIResult<i32> {
-		let params = json!({
-			"user_id": user_id,
-			"message": message,
-			"auto_escape": auto_escape
-		});
-		let response: SendMsgResponse = self.send_and_parse("send_private_msg", params).await?;
-		Ok(response.message_id)
 	}
 
+	#[api(extract = "message_id", response = SendMsgResponse)]
 	async fn send_group_msg(
 		&self,
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
 	) -> APIResult<i32> {
-		let params = json!({
-			"group_id": group_id,
-			"message": message,
-			"auto_escape": auto_escape
-		});
-		let response: SendMsgResponse = self.send_and_parse("send_group_msg", params).await?;
-		Ok(response.message_id)
 	}
 
+	#[api(extract = "message_id", response = SendMsgResponse)]
 	async fn send_msg(
 		&self,
 		message_type: Option<MessageType>,
@@ -591,46 +573,16 @@ impl APISenderTrait for Client {
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
 	) -> APIResult<i32> {
-		let params = json!({
-			"message_type": message_type,
-			"user_id": user_id,
-			"group_id": group_id,
-			"message": message,
-			"auto_escape": auto_escape
-		});
-		let response: SendMsgResponse = self.send_and_parse("send_msg", params).await?;
-		Ok(response.message_id)
 	}
 
-	async fn delete_msg(&self, message_id: i32) -> APIResult<()> {
-		let params = json!({
-			"message_id": message_id
-		});
-		self.send_and_parse("delete_msg", params).await
-	}
+	async fn delete_msg(&self, message_id: i32) -> APIResult<()> {}
 
-	async fn get_msg(&self, message_id: i32) -> APIResult<GetMsgResponse> {
-		let params = json!({
-			"message_id": message_id
-		});
-		self.send_and_parse("get_msg", params).await
-	}
+	async fn get_msg(&self, message_id: i32) -> APIResult<GetMsgResponse> {}
 
-	async fn get_forward_msg(&self, id: String) -> APIResult<Vec<ReceiveSegment>> {
-		let params = json!({
-			"id": id
-		});
-		let response: GetForwardMsgResponse = self.send_and_parse("get_forward_msg", params).await?;
-		Ok(response.message)
-	}
+	#[api(extract = "message", response = GetForwardMsgResponse)]
+	async fn get_forward_msg(&self, id: String) -> APIResult<Vec<ReceiveSegment>> {}
 
-	async fn send_like(&self, user_id: i64, times: Option<i32>) -> APIResult<()> {
-		let params = json!({
-			"user_id": user_id,
-			"times": times
-		});
-		self.send_and_parse("send_like", params).await
-	}
+	async fn send_like(&self, user_id: i64, times: Option<i32>) -> APIResult<()> {}
 
 	async fn set_group_kick(
 		&self,
@@ -638,12 +590,6 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		reject_add_request: Option<bool>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"reject_add_request": reject_add_request
-		});
-		self.send_and_parse("set_group_kick", params).await
 	}
 
 	async fn set_group_ban(
@@ -652,12 +598,6 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		duration: Option<i32>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"duration": duration
-		});
-		self.send_and_parse("set_group_ban", params).await
 	}
 
 	async fn set_group_anonymous_ban(
@@ -667,22 +607,9 @@ impl APISenderTrait for Client {
 		flag: Option<String>,
 		duration: Option<i32>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"anonymous": anonymous,
-			"flag": flag,
-			"duration": duration
-		});
-		self.send_and_parse("set_group_anonymous_ban", params).await
 	}
 
-	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"enable": enable
-		});
-		self.send_and_parse("set_group_whole_ban", params).await
-	}
+	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_admin(
 		&self,
@@ -690,21 +617,9 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		enable: Option<bool>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"enable": enable
-		});
-		self.send_and_parse("set_group_admin", params).await
 	}
 
-	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"enable": enable
-		});
-		self.send_and_parse("set_group_anonymous", params).await
-	}
+	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_card(
 		&self,
@@ -712,29 +627,11 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		card: Option<String>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"card": card
-		});
-		self.send_and_parse("set_group_card", params).await
 	}
 
-	async fn set_group_name(&self, group_id: i32, group_name: String) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"group_name": group_name
-		});
-		self.send_and_parse("set_group_name", params).await
-	}
+	async fn set_group_name(&self, group_id: i32, group_name: String) -> APIResult<()> {}
 
-	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"is_dismiss": is_dismiss
-		});
-		self.send_and_parse("set_group_leave", params).await
-	}
+	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_special_title(
 		&self,
@@ -743,13 +640,6 @@ impl APISenderTrait for Client {
 		special_title: Option<String>,
 		duration: Option<i32>,
 	) -> APIResult<()> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"special_title": special_title,
-			"duration": duration
-		});
-		self.send_and_parse("set_group_special_title", params).await
 	}
 
 	async fn set_friend_add_request(
@@ -758,12 +648,6 @@ impl APISenderTrait for Client {
 		approve: Option<bool>,
 		remark: Option<String>,
 	) -> APIResult<()> {
-		let params = json!({
-			"flag": flag,
-			"approve": approve,
-			"remark": remark
-		});
-		self.send_and_parse("set_friend_add_request", params).await
 	}
 
 	async fn set_group_add_request(
@@ -773,53 +657,27 @@ impl APISenderTrait for Client {
 		approve: Option<bool>,
 		reason: Option<String>,
 	) -> APIResult<()> {
-		let params = json!({
-			"flag": flag,
-			"sub_type": sub_type,
-			"approve": approve,
-			"reason": reason
-		});
-		self.send_and_parse("set_group_add_request", params).await
 	}
 
-	async fn get_login_info(&self) -> APIResult<GetLoginInfoResponse> {
-		let params = json!({});
-		self.send_and_parse("get_login_info", params).await
-	}
+	async fn get_login_info(&self) -> APIResult<GetLoginInfoResponse> {}
 
 	async fn get_stranger_info(
 		&self,
 		user_id: i32,
 		no_cache: Option<bool>,
 	) -> APIResult<GetStrangerInfoResponse> {
-		let params = json!({
-			"user_id": user_id,
-			"no_cache": no_cache
-		});
-		self.send_and_parse("get_stranger_info", params).await
 	}
 
-	async fn get_friend_list(&self) -> APIResult<Vec<GetFriendListResponse>> {
-		let params = json!({});
-		self.send_and_parse("get_friend_list", params).await
-	}
+	async fn get_friend_list(&self) -> APIResult<Vec<GetFriendListResponse>> {}
 
 	async fn get_group_info(
 		&self,
 		group_id: i32,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupInfoResponse> {
-		let params = json!({
-			"group_id": group_id,
-			"no_cache": no_cache
-		});
-		self.send_and_parse("get_group_info", params).await
 	}
 
-	async fn get_group_list(&self) -> APIResult<Vec<GetGroupInfoResponse>> {
-		let params = json!({});
-		self.send_and_parse("get_group_list", params).await
-	}
+	async fn get_group_list(&self) -> APIResult<Vec<GetGroupInfoResponse>> {}
 
 	async fn get_group_member_info(
 		&self,
@@ -827,105 +685,47 @@ impl APISenderTrait for Client {
 		user_id: i32,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupMemberInfoResponse> {
-		let params = json!({
-			"group_id": group_id,
-			"user_id": user_id,
-			"no_cache": no_cache
-		});
-		self.send_and_parse("get_group_member_info", params).await
 	}
 
 	async fn get_group_member_list(
 		&self,
 		group_id: i32,
 	) -> APIResult<Vec<GetGroupMemberInfoResponse>> {
-		let params = json!({
-			"group_id": group_id
-		});
-		self.send_and_parse("get_group_member_list", params).await
 	}
 
+	#[api(map(honor_type = "type"))]
 	async fn get_group_honor_info(
 		&self,
 		group_id: i64,
 		honor_type: String,
 	) -> APIResult<GetGroupMemberInfoResponse> {
-		let params = json!({
-			"group_id": group_id,
-			"type": honor_type
-		});
-		self.send_and_parse("get_group_honor_info", params).await
 	}
 
-	async fn get_cookies(&self, domain: Option<String>) -> APIResult<String> {
-		let params = json!({
-			"domain": domain
-		});
-		let response: GetCookiesResponse = self.send_and_parse("get_cookies", params).await?;
-		Ok(response.cookies)
-	}
+	#[api(extract = "cookies", response = GetCookiesResponse)]
+	async fn get_cookies(&self, domain: Option<String>) -> APIResult<String> {}
 
-	async fn get_csrf_token(&self) -> APIResult<i32> {
-		let params = json!({});
-		let response: GetCsrfTokenResponse = self.send_and_parse("get_csrf_token", params).await?;
-		Ok(response.token)
-	}
+	#[api(extract = "token", response = GetCsrfTokenResponse)]
+	async fn get_csrf_token(&self) -> APIResult<i32> {}
 
-	async fn get_credentials(&self, domain: Option<String>) -> APIResult<GetCredentialsResponse> {
-		let params = json!({
-			"domain": domain
-		});
-		self.send_and_parse("get_credentials", params).await
-	}
+	async fn get_credentials(&self, domain: Option<String>) -> APIResult<GetCredentialsResponse> {}
 
-	async fn get_record(&self, file: String, out_format: String) -> APIResult<String> {
-		let params = json!({
-			"file": file,
-			"out_format": out_format
-		});
-		let response: GetDataResponse = self.send_and_parse("get_record", params).await?;
-		Ok(response.file)
-	}
+	#[api(extract = "file", response = GetDataResponse)]
+	async fn get_record(&self, file: String, out_format: String) -> APIResult<String> {}
 
-	async fn get_image(&self, file: String) -> APIResult<String> {
-		let params = json!({
-			"file": file
-		});
-		let response: GetDataResponse = self.send_and_parse("get_image", params).await?;
-		Ok(response.file)
-	}
+	#[api(extract = "file", response = GetDataResponse)]
+	async fn get_image(&self, file: String) -> APIResult<String> {}
 
-	async fn can_send_image(&self) -> APIResult<bool> {
-		let params = json!({});
-		let response: CanSendResponse = self.send_and_parse("can_send_image", params).await?;
-		Ok(response.yes)
-	}
+	#[api(extract = "yes", response = CanSendResponse)]
+	async fn can_send_image(&self) -> APIResult<bool> {}
 
-	async fn can_send_record(&self) -> APIResult<bool> {
-		let params = json!({});
-		let response: CanSendResponse = self.send_and_parse("can_send_record", params).await?;
-		Ok(response.yes)
-	}
+	#[api(extract = "yes", response = CanSendResponse)]
+	async fn can_send_record(&self) -> APIResult<bool> {}
 
-	async fn get_status(&self) -> APIResult<GetStatusResponse> {
-		let params = json!({});
-		self.send_and_parse("get_status", params).await
-	}
+	async fn get_status(&self) -> APIResult<GetStatusResponse> {}
 
-	async fn get_version_info(&self) -> APIResult<GetVersionInfoResponse> {
-		let params = json!({});
-		self.send_and_parse("get_version_info", params).await
-	}
+	async fn get_version_info(&self) -> APIResult<GetVersionInfoResponse> {}
 
-	async fn set_restart(&self, delay: Option<i32>) -> APIResult<()> {
-		let params = json!({
-			"delay": delay
-		});
-		self.send_and_parse("set_restart", params).await
-	}
+	async fn set_restart(&self, delay: Option<i32>) -> APIResult<()> {}
 
-	async fn clean_cache(&self) -> APIResult<()> {
-		let params = json!({});
-		self.send_and_parse("clean_cache", params).await
-	}
+	async fn clean_cache(&self) -> APIResult<()> {}
 }

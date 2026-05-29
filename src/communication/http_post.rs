@@ -5,7 +5,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::routing::any;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http::{HeaderMap, StatusCode};
 use sha1::Sha1;
 use std::sync::Arc;
