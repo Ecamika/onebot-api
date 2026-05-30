@@ -12,7 +12,6 @@ license-file = "LICENSE"
 [dependencies]
 onebot-api-macros = { version = "0.1.0", path = "macros" }
 
-anyhow = "1.0.102"
 #async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = "0.3.32"

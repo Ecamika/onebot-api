@@ -1,5 +1,5 @@
 use super::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
@@ -51,13 +51,13 @@ struct AppState {
 	api_receiver: InternalAPIReceiver,
 	event_sender: InternalEventSender,
 	connected: Arc<AtomicBool>,
-	connection_handle: Arc<Mutex<Option<JoinHandle<anyhow::Result<()>>>>>,
+	connection_handle: Arc<Mutex<Option<JoinHandle<ServiceRuntimeResult<()>>>>>,
 }
 
 async fn send_processor(
 	mut send_side: SplitSink<WebSocket, Message>,
 	api_receiver: InternalAPIReceiver,
-) -> anyhow::Result<()> {
+) -> ServiceRuntimeResult<()> {
 	loop {
 		match api_receiver.recv_async().await {
 			Ok(data) => {
@@ -67,7 +67,7 @@ async fn send_processor(
 				}
 				let _ = send_side.send(Message::Text(str?.into())).await;
 			}
-			Err(_) => return Err(anyhow::anyhow!("api receiver closed")),
+			Err(_) => return Err(ServiceRuntimeError::ChannelClosed),
 		}
 	}
 }
@@ -75,7 +75,7 @@ async fn send_processor(
 async fn read_processor(
 	mut read_side: SplitStream<WebSocket>,
 	event_sender: InternalEventSender,
-) -> anyhow::Result<()> {
+) -> ServiceRuntimeResult<()> {
 	loop {
 		match read_side.next().await {
 			Some(Ok(msg)) => match msg {
@@ -88,12 +88,12 @@ async fn read_processor(
 					let _ = event_sender.send_async(event?).await;
 				}
 				Message::Close(_) => {
-					return Err(anyhow::anyhow!("websocket closed by peer"));
+					return Err(ServiceRuntimeError::WebSocketClosedByPeer);
 				}
 				_ => (),
 			},
-			Some(Err(_)) => return Err(anyhow::anyhow!("websocket error")),
-			None => return Err(anyhow::anyhow!("websocket stream ended")),
+			Some(Err(_)) => return Err(ServiceRuntimeError::WebSocketError),
+			None => return Err(ServiceRuntimeError::WebSocketStreamEnded),
 		}
 	}
 }

@@ -1,5 +1,5 @@
 use crate::communication::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
 
@@ -85,7 +85,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		async fn processor(
 			event_process_receiver: InternalEventReceiver,
 			event_sender: InternalEventSender,
-		) -> anyhow::Result<()> {
+		) -> ServiceRuntimeResult<()> {
 			loop {
 				match event_process_receiver.recv_async().await {
 					Ok(data) => {
@@ -93,7 +93,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 							let _ = event_sender.send(data);
 						}
 					}
-					Err(_) => return Err(anyhow::anyhow!("event process channel closed")),
+					Err(_) => return Err(ServiceRuntimeError::ChannelClosed),
 				}
 			}
 		}

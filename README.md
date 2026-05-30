@@ -521,8 +521,8 @@ async fn main() {
 - `WsService` 自动重连 ✅
 - `SseService` 自动重连 ❌ *（目前还没有方法能够在SSE连接突然断开后获得通知）*
 - 更精细化的错误处理
-	- `Client` 实现无 `anyhow::Result` ❌
-	- 服务 task 实现无 `anyhow::Result`
+	- `Client` 实现无 `anyhow::Result` ✅
+	- 服务 task 实现无 `anyhow::Result` ✅
 	- 取消服务 task 错误静默处理
 - 更完善的文档注释
 - 自定义Event反序列化 ✅? （感觉没啥用，直接用 `extra_body` 字段代替了）

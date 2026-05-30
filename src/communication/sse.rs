@@ -1,5 +1,5 @@
 use super::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use bytes::Bytes;
 use eventsource_stream::{EventStream, Eventsource};
@@ -61,7 +61,7 @@ impl SseService {
 
 	pub async fn eventsource(
 		&self,
-	) -> anyhow::Result<EventStream<impl Stream<Item = reqwest::Result<Bytes>>>> {
+	) -> ServiceRuntimeResult<EventStream<impl Stream<Item = reqwest::Result<Bytes>>>> {
 		let client = reqwest::Client::new();
 		let mut req = client.get(self.url.clone());
 		if let Some(token) = &self.access_token {
@@ -71,7 +71,7 @@ impl SseService {
 		Ok(eventsource)
 	}
 
-	async fn eventsource_listener(self) -> anyhow::Result<()> {
+	async fn eventsource_listener(self) -> ServiceRuntimeResult<()> {
 		let mut es = self.eventsource().await?;
 		let event_sender = self.event_sender.clone().unwrap();
 		loop {
@@ -83,24 +83,10 @@ impl SseService {
 					}
 					let _ = event_sender.send_async(event?).await;
 				}
-				_ => return Err(anyhow::anyhow!("eventsource ended")),
+				_ => return Err(ServiceRuntimeError::EventSourceEnded),
 			}
 		}
 	}
-
-	// async fn reconnect_processor(self) -> anyhow::Result<()> {
-	// 	let mut close_signal = self.close_signal_sender.subscribe();
-	// 	let mut reconnect_signal = self.reconnect_signal_sender.subscribe();
-	//
-	// 	loop {
-	// 		select! {
-	// 			_ = close_signal.recv() => return Err(anyhow::anyhow!("close")),
-	// 			_ = reconnect_signal.recv() => {
-	//
-	// 			}
-	// 		}
-	// 	}
-	// }
 }
 
 #[async_trait]

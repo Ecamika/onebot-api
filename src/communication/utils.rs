@@ -1,7 +1,7 @@
 use crate::api::APISender as APISenderTrait;
 use crate::api::arg_type::MessageType;
 use crate::api::return_type::*;
-use crate::error::{APIRequestError, APIResult, ServiceRuntimeError, ServiceStartResult};
+use crate::error::{APIRequestError, APIResult, ServiceRuntimeError, ServiceRuntimeResult, ServiceStartResult};
 pub use crate::event::Event as NormalEvent;
 use crate::event::EventTrait;
 use crate::event::message::GroupMessageAnonymous;
@@ -53,7 +53,7 @@ pub type PublicEventSender = FlumeSender<NormalEvent>;
 /// 公开，任何人都可持有
 pub type PublicEventReceiver = FlumeReceiver<NormalEvent>;
 
-pub type ServiceRuntimeResult<T> = Result<T, ServiceRuntimeError>;
+
 
 // pub type ArcServiceRuntimeError = Arc<ServiceRuntimeError>;
 type ArcAPIRequestRegistry = Arc<Mutex<BTreeMap<String, InternalAPIResponseSender>>>;
@@ -189,7 +189,7 @@ pub struct Client {
 	public_event_receiver: PublicEventReceiver,
 	timeout: Option<Duration>,
 	echo_generator: Box<dyn Fn() -> String + Send + Sync>,
-	processor_handle: JoinHandle<anyhow::Result<()>>,
+	processor_handle: JoinHandle<ServiceRuntimeResult<()>>,
 }
 
 pub struct ClientBuilder {
@@ -371,7 +371,7 @@ impl Client {
 		internal_event_receiver: InternalEventReceiver,
 		api_request_registry: ArcAPIRequestRegistry,
 		public_event_sender: PublicEventSender,
-	) -> anyhow::Result<()> {
+	) -> ServiceRuntimeResult<()> {
 		loop {
 			match internal_event_receiver.recv_async().await {
 				Ok(DeserializedEvent::APIResponse(v)) => {
@@ -390,7 +390,7 @@ impl Client {
 					}
 					let _ = public_event_sender.send_async(v?).await;
 				}
-				Err(_) => return Err(anyhow::anyhow!("internal event channel closed")),
+				Err(_) => return Err(ServiceRuntimeError::ChannelClosed),
 			}
 		}
 	}

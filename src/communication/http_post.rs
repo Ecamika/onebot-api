@@ -31,7 +31,7 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> Drop for HttpPostService<T> {
 }
 
 impl<T: ToSocketAddrs + Clone + Send + Sync> HttpPostService<T> {
-	pub fn new(addr: T, prefix: Option<String>, secret: Option<String>) -> anyhow::Result<Self> {
+	pub fn new(addr: T, prefix: Option<String>, secret: Option<String>) -> ServiceStartResult<Self> {
 		let hmac = if let Some(secret) = secret {
 			Some(HmacSha1::new_from_slice(secret.as_ref())?)
 		} else {

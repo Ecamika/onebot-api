@@ -1,5 +1,5 @@
 use super::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use reqwest::IntoUrl;
 use serde::Deserialize;
@@ -51,7 +51,7 @@ impl HttpService {
 		})
 	}
 
-	async fn api_processor(self) -> anyhow::Result<()> {
+	async fn api_processor(self) -> ServiceRuntimeResult<()> {
 		let api_receiver = self.api_receiver.clone().unwrap();
 		let event_sender = self.event_sender.clone().unwrap();
 		let client = reqwest::Client::new();
@@ -69,7 +69,7 @@ impl HttpService {
 					}
 					let _ = event_sender.send_async(event?).await;
 				}
-				Err(_) => return Err(anyhow::anyhow!("api receiver closed")),
+				Err(_) => return Err(ServiceRuntimeError::ChannelClosed),
 			}
 		}
 	}
@@ -78,11 +78,11 @@ impl HttpService {
 		&self,
 		client: &reqwest::Client,
 		api_request: &APIRequest,
-	) -> anyhow::Result<reqwest::Response> {
+	) -> ServiceRuntimeResult<reqwest::Response> {
 		let mut url = self.url.clone();
 		let mut path_segments = url
 			.path_segments_mut()
-			.map_err(|_| anyhow::anyhow!("URL is cannot-be-a-base"))?;
+			.map_err(|_| ServiceRuntimeError::UrlCannotBeBase)?;
 		path_segments.push(&api_request.action);
 		drop(path_segments);
 		let mut post_req = client.post(url);
@@ -100,7 +100,7 @@ impl HttpService {
 		&self,
 		echo: Option<String>,
 		response: reqwest::Response,
-	) -> anyhow::Result<DeserializedEvent> {
+	) -> ServiceRuntimeResult<DeserializedEvent> {
 		let status = response.status();
 		if !status.is_success() {
 			let res = APIResponse {
