@@ -6,6 +6,30 @@
 库如其名，这是一个Onebot V11协议的实现  
 目前已完成对Onebot V11协议所有API的实现
 
+> **Requirements**: Rust >= 1.85 (Edition 2024)
+
+# Features
+
+默认启用 `full` feature，包含所有协议模块。可按需选择：
+
+| Feature | 说明 |
+|---------|------|
+| `websocket` | 正向 WebSocket |
+| `websocket-reverse` | 反向 WebSocket |
+| `http` | HTTP API 调用 |
+| `http-post` | HTTP Post 事件上报 |
+| `sse` | Server-Sent Events |
+| `combiner` | 组合器 (SplitCombiner / BothEventCombiner) |
+| `quick_operation` | 快速操作 trait |
+| `selector` | 事件选择器 |
+| `rustls` | 使用 rustls 作为 TLS 后端 |
+| `native-tls` | 使用 native-tls 作为 TLS 后端 |
+
+```toml
+[dependencies]
+onebot-api = { version = "1.2", default-features = false, features = ["websocket", "http"] }
+```
+
 # 核心概念
 
 ## `Client`
@@ -20,6 +44,21 @@
 对于资源管理方面，`Client` 实现了 `Drop` 特征，在 `Client` 析构时会自动清理其产生的所有资源  
 但 `Client` 并不会清理外部依赖所产生的资源，这依赖于外部依赖的析构函数（本库中所有实现了 `CommunicationService` 的结构都实现了
 `Drop` 特征）
+
+## `ClientBuilder`
+
+`ClientBuilder` 提供了更灵活的方式来构造 `Client`，支持自定义通道容量、超时时间和 echo 生成器：
+
+```rust
+use std::time::Duration;
+use onebot_api::communication::utils::Client;
+use onebot_api::communication::ws::WsService;
+
+let client = Client::builder(WsService::new("wss://example.com".parse().unwrap(), None))
+    .timeout(Duration::from_secs(5))
+    .union_channel_cap(32)
+    .build();
+```
 
 ## `CommunicationService`
 
@@ -56,22 +95,21 @@ flowchart LR
 ```rust
 use std::time::Duration;
 use onebot_api::api::APISender;
-use onebot_api::communication::utils::{Client, Event};
+use onebot_api::communication::utils::Client;
 use onebot_api::communication::ws::WsService;
-use onebot_api::event::EventReceiver;
 use onebot_api::text;
 
 #[tokio::main]
 async fn main() {
-	let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
-	let client = Client::new(ws_service, Some(Duration::from_secs(5)), None, None);
+	let ws_service = WsService::new("wss://example.com".parse().unwrap(), Some("example_token".to_string()));
+	let client = Client::new_with_timeout(ws_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 
 	let msg_id = client.send_private_msg(123456, text!("this is a {}", "message"), None).await.unwrap();
 	client.send_like(123456, Some(10)).await.unwrap();
 
-	let mut event_receiver = client.get_receiver();
-	while let Ok(event) = event_receiver.recv().await && let Event::Event(event) = &*event {
+	let mut event_receiver = client.get_normal_event_receiver();
+	while let Ok(event) = event_receiver.recv().await {
 		println!("{:#?}", event)
 	}
 }
@@ -86,8 +124,8 @@ use onebot_api::communication::ws::WsService;
 
 #[tokio::main]
 async fn main() {
-	let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
-	let client = Client::new(ws_service, Some(Duration::from_secs(5)), None, None);
+	let ws_service = WsService::new("wss://example.com".parse().unwrap(), Some("example_token".to_string()));
+	let client = Client::new_with_timeout(ws_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -102,7 +140,7 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() {
 	let ws_reverse_service = WsReverseService::new("0.0.0.0:8080", Some("example_token".to_string()));
-	let client = Client::new(ws_reverse_service, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(ws_reverse_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -117,7 +155,7 @@ use onebot_api::communication::http::HttpService;
 #[tokio::main]
 async fn main() {
 	let http_service = HttpService::new("https://example.com", Some("example_token".to_string())).unwrap();
-	let client = Client::new(http_service, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(http_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -132,7 +170,7 @@ use onebot_api::communication::http_post::HttpPostService;
 #[tokio::main]
 async fn main() {
 	let http_post_service = HttpPostService::new("0.0.0.0:8080", None, Some("example_secret".to_string())).unwrap();
-	let client = Client::new(http_post_service, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(http_post_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -147,7 +185,7 @@ use onebot_api::communication::sse::SseService;
 #[tokio::main]
 async fn main() {
 	let sse_service = SseService::new("https://example.com/_events", Some("example_token".to_string())).unwrap();
-	let client = Client::new(sse_service, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(sse_service, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -178,7 +216,7 @@ async fn main() {
 	let sse_service = SseService::new("https://example.com/_events", Some("example_token".to_string())).unwrap();
 	let http_service = HttpService::new("https://example.com", Some("example_token".to_string())).unwrap();
 	let combiner = SplitCombiner::new(http_service, sse_service);
-	let client = Client::new(combiner, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(combiner, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -216,10 +254,10 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
-	let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
+	let ws_service = WsService::new("wss://example.com".parse().unwrap(), Some("example_token".to_string()));
 	let ws_reverse_service = WsReverseService::new("0.0.0.0:8080", Some("example_token".to_string()));
 	let combiner = BothEventCombiner::new(ws_service, ws_reverse_service);
-	let client = Client::new(combiner, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(combiner, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -251,7 +289,7 @@ use onebot_api::communication::ws_reverse::WsReverseService;
 
 #[tokio::main]
 async fn main() {
-	let bot_1 = WsService::new("ws://127.0.0.1:5000", None).unwrap();
+	let bot_1 = WsService::new("ws://127.0.0.1:5000".parse().unwrap(), None);
 	let bot_2 = WsReverseService::new("127.0.0.1:6000", None);
 	let bot_3 = SseService::new("http://127.0.0.1:7000", None).unwrap();
 	let bot_4 = HttpPostService::new("127.0.0.1:8000", None, None).unwrap();
@@ -261,7 +299,7 @@ async fn main() {
 
 	let combiner = BothEventCombiner::new(combiner_1, combiner_2);
 
-	let client = Client::new(combiner, Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(combiner, Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 }
 ```
@@ -312,7 +350,7 @@ use onebot_api::message::SegmentBuilder;
 
 #[tokio::main]
 async fn main() {
-	let client = Client::new(WsService::new("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(WsService::new("ws://localhost:8080".parse().unwrap(), None), Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 
 	let segment = SegmentBuilder::new()
@@ -359,7 +397,7 @@ use onebot_api::text;
 
 #[tokio::main]
 async fn main() {
-	let client = Client::new(WsService::new("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
+	let client = Client::new_with_timeout(WsService::new("ws://localhost:8080".parse().unwrap(), None), Some(Duration::from_secs(5)));
 	client.start_service().await.unwrap();
 
 	let msg = "123456".to_string();
@@ -371,11 +409,20 @@ async fn main() {
 因此，你可以像使用 `println` 宏一样使用 `text` 宏
 
 ## quick_operation
-有时候，我们收到了一个事件，我们想直接对这个事件进行操作  
-此时，若调用 `client` 上的对应api，效率未免太低了，还要一个个传参  
-于是，我们提供了 quick_operation  
-quick_operation 是一系列快速操作trait（虽然目前还没实现多少，但未来肯定会实现的！）  
-用户可以直接在事件上进行对应的操作  
+有时候，我们收到了一个事件，我们想直接对这个事件进行操作
+此时，若调用 `client` 上的对应api，效率未免太低了，还要一个个传参
+于是，我们提供了 quick_operation
+quick_operation 是一系列快速操作trait，用户可以直接在事件上进行对应的操作
+
+目前已实现的 quick operation trait：
+
+- `QuickSendMsg` - 快速发送消息
+- `QuickReplyAt` - 快速回复并@某人
+- `QuickDeleteMsg` - 快速删除消息
+- `QuickKick` - 快速踢出群成员
+- `QuickBan` - 快速禁言群成员
+- `QuickHandleFriendRequest` - 快速处理好友请求
+- `QuickHandleGroupRequest` - 快速处理群请求
 
 ## `Selector`
 
@@ -391,10 +438,10 @@ use onebot_api::text;
 
 #[tokio::main]
 async fn main() {
-	let ws_service = WsService::new("wss://example.com", Some("example_token".to_string())).unwrap();
+	let ws_service = WsService::new("wss://example.com".parse().unwrap(), Some("example_token".to_string()));
 	let client = Client::new(ws_service);
 	client.start_service().await.unwrap();
-	let mut r = client.subscribe_normal_event();
+	let mut r = client.get_normal_event_receiver();
 	while let Ok(event) = r.recv().await {
 		event
 			.selector()
@@ -436,16 +483,49 @@ async fn main() {
 
 当然，最后的 `select_async` 也有对应的异步版本
 
+## `EventBroadcastDecorator`
+
+`EventBroadcastDecorator` 包装了 `Client`，将事件从 flume channel 转发到 `tokio::broadcast` channel，支持多个订阅者同时接收事件：
+
+```rust
+use std::time::Duration;
+use onebot_api::communication::utils::Client;
+use onebot_api::communication::ws::WsService;
+use onebot_api::communication::decorator::EventBroadcastDecorator;
+
+#[tokio::main]
+async fn main() {
+	let client = Client::new(WsService::new("ws://localhost:8080".parse().unwrap(), None));
+	client.start_service().await.unwrap();
+
+	let decorator = EventBroadcastDecorator::new(client, 16);
+	let mut receiver_1 = decorator.subscribe();
+	let mut receiver_2 = decorator.subscribe();
+
+	tokio::spawn(async move {
+		while let Ok(event) = receiver_1.recv().await {
+			println!("receiver 1: {:#?}", event);
+		}
+	});
+
+	while let Ok(event) = receiver_2.recv().await {
+		println!("receiver 2: {:#?}", event);
+	}
+}
+```
+
+`EventBroadcastDecorator` 实现了 `Deref` / `DerefMut`，因此可以直接在其上调用 `Client` 的所有方法。
+
 # Todo List
 
 - `WsService` 自动重连 ✅
 - `SseService` 自动重连 ❌ *（目前还没有方法能够在SSE连接突然断开后获得通知）*
 - 更精细化的错误处理
-    - `Client` 实现无 `anyhow::Result` ✅
-    - 服务 task 实现无 `anyhow::Result`
-    - 取消服务 task 错误静默处理
+	- `Client` 实现无 `anyhow::Result` ❌
+	- 服务 task 实现无 `anyhow::Result`
+	- 取消服务 task 错误静默处理
 - 更完善的文档注释
-- 自定义Event反序列化
+- 自定义Event反序列化 ✅? （感觉没啥用，直接用 `extra_body` 字段代替了）
 - 更多的API！
-    - napcat API
-    - go-cqhttp API
+	- napcat API
+	- go-cqhttp API

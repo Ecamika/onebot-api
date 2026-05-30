@@ -10,3 +10,6 @@ pub mod message;
 pub mod quick_operation;
 #[cfg(feature = "selector")]
 pub mod selector;
+
+#[cfg(feature = "selector")]
+pub use onebot_api_macros::Selector;

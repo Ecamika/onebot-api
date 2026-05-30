@@ -1,7 +1,9 @@
 use super::utils::*;
 use serde::Deserialize;
+use strum::EnumIs;
 
-#[derive(Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "selector", derive(crate::Selector))]
+#[derive(Deserialize, Debug, Clone, EnumIs)]
 #[serde(tag = "type")]
 pub enum ReceiveSegment {
 	#[serde(rename = "text")]

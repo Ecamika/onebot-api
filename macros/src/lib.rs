@@ -1,4 +1,12 @@
+mod selector;
+
 use proc_macro::TokenStream;
+
+#[proc_macro_derive(Selector, attributes(selector))]
+pub fn derive_selector(input: TokenStream) -> TokenStream {
+	selector::derive_selector(input)
+}
+
 use quote::quote;
 use syn::{
 	Attribute, Expr, FnArg, ImplItem, ImplItemFn, ItemImpl, Meta, Pat, Type, parse_macro_input,

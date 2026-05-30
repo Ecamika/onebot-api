@@ -57,3 +57,10 @@ Procedure:
 2. If the file exists, append the current change to it.
 3. If the file does not exist, create it and write the change.
 4. Each entry should include: what was changed, which files were affected, and a brief reason or impact.
+
+## Macros documentation rule
+**Whenever any modification is made to `macros/` (adding, removing, or changing proc macros and their behavior), the documentation in `macros/docs/` MUST be kept in sync.**
+
+- Adding a new proc macro: create a corresponding markdown file under `macros/docs/` named after the macro (e.g. `my_macro.md` for `#[my_macro]`), documenting its functionality, usage, and attributes.
+- Removing a proc macro: delete the corresponding markdown file from `macros/docs/`.
+- Changing macro behavior or attributes: update the existing markdown file to reflect the new behavior.
