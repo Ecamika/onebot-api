@@ -1,5 +1,7 @@
 use super::utils::*;
-use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
+use crate::error::{
+	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
+};
 use async_trait::async_trait;
 use reqwest::IntoUrl;
 use serde::Deserialize;

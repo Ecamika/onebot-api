@@ -1,5 +1,7 @@
 use super::utils::*;
-use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
+use crate::error::{
+	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
+};
 use async_trait::async_trait;
 use bytes::Bytes;
 use eventsource_stream::{EventStream, Eventsource};

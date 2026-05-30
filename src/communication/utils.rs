@@ -1,7 +1,9 @@
 use crate::api::APISender as APISenderTrait;
 use crate::api::arg_type::MessageType;
 use crate::api::return_type::*;
-use crate::error::{APIRequestError, APIResult, ServiceRuntimeError, ServiceRuntimeResult, ServiceStartResult};
+use crate::error::{
+	APIRequestError, APIResult, ServiceRuntimeError, ServiceRuntimeResult, ServiceStartResult,
+};
 pub use crate::event::Event as NormalEvent;
 use crate::event::EventTrait;
 use crate::event::message::GroupMessageAnonymous;
@@ -52,8 +54,6 @@ pub type PublicEventSender = FlumeSender<NormalEvent>;
 /// 事件（除去API响应）的接收通道  
 /// 公开，任何人都可持有
 pub type PublicEventReceiver = FlumeReceiver<NormalEvent>;
-
-
 
 // pub type ArcServiceRuntimeError = Arc<ServiceRuntimeError>;
 type ArcAPIRequestRegistry = Arc<Mutex<BTreeMap<String, InternalAPIResponseSender>>>;
@@ -698,7 +698,7 @@ impl APISenderTrait for Client {
 		&self,
 		group_id: i64,
 		honor_type: String,
-	) -> APIResult<GetGroupMemberInfoResponse> {
+	) -> APIResult<GetGroupHonorInfoResponse> {
 	}
 
 	#[api(extract = "cookies", response = GetCookiesResponse)]

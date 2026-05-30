@@ -1,5 +1,7 @@
 use crate::communication::utils::*;
-use crate::error::{ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
+use crate::error::{
+	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
+};
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
 
