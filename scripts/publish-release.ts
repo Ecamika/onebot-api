@@ -51,6 +51,39 @@ async function runScript(command: string, args: string[], cwd?: string) {
   }
 }
 
+async function readManifest(baseDir: string, relativePath: string): Promise<Manifest> {
+  const manifestPath = path.join(baseDir, relativePath)
+  const content = await Deno.readTextFile(manifestPath)
+  return toml.parse(content) as unknown as Manifest
+}
+
+async function checkCrateVersionExists(name: string, version: string): Promise<boolean> {
+  try {
+    const reqUrl = `https://crates.io/api/v1/crates/${name}`
+    const response = await fetch(reqUrl)
+    if (!response.ok) {
+      return false
+    }
+    const crateInfo = await response.json() as CrateInfo
+    return crateInfo.crate.newest_version === version
+  } catch (_e) {
+    return false
+  }
+}
+
+async function waitForCrateIndex(name: string, version: string, maxWaitMs = 300000, intervalMs = 10000) {
+  const startTime = Date.now()
+  while (Date.now() - startTime < maxWaitMs) {
+    if (await checkCrateVersionExists(name, version)) {
+      console.log(`crate ${name}@${version} is now available on crates.io`)
+      return
+    }
+    console.log(`waiting for ${name}@${version} to be available on crates.io...`)
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
+  }
+  throw new Error(`timeout waiting for ${name}@${version} to be available on crates.io`)
+}
+
 async function main() {
   const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")
   const GITHUB_REPOSITORY = Deno.env.get("GITHUB_REPOSITORY")
@@ -72,17 +105,29 @@ async function main() {
 
   const baseDir = Deno.cwd()
 
-  const manifestPath = path.join(baseDir, "Cargo.toml")
-  const manifest = toml.parse(await Deno.readTextFile(manifestPath)) as unknown as Manifest
+  const mainManifest = await readManifest(baseDir, "Cargo.toml")
+  const mainName = mainManifest.package.name
+  const mainVersion = mainManifest.package.version
 
-  const reqUrl = `https://crates.io/api/v1/crates/${manifest.package.name}`
-  const crateInfo = await (await fetch(reqUrl)).json() as CrateInfo
-
-  if (crateInfo.crate.newest_version === manifest.package.version) {
+  if (await checkCrateVersionExists(mainName, mainVersion)) {
+    console.log(`${mainName}@${mainVersion} already exists on crates.io, skipping.`)
     return
   }
 
-  const tag = `v${manifest.package.version}`
+  const macrosManifest = await readManifest(baseDir, "macros/Cargo.toml")
+  const macrosName = macrosManifest.package.name
+  const macrosVersion = macrosManifest.package.version
+
+  if (!await checkCrateVersionExists(macrosName, macrosVersion)) {
+    console.log(`publishing ${macrosName}@${macrosVersion}...`)
+    await runScript("cargo", ["publish", "--token", CARGO_PUBLISH], path.join(baseDir, "macros"))
+    console.log(`waiting for ${macrosName}@${macrosVersion} to be indexed...`)
+    await waitForCrateIndex(macrosName, macrosVersion)
+  } else {
+    console.log(`${macrosName}@${macrosVersion} already exists on crates.io, skipping.`)
+  }
+
+  const tag = `v${mainVersion}`
 
   await octokit.repos.createRelease({
     repo: REPO_NAME,
@@ -99,4 +144,3 @@ async function main() {
 }
 
 await main()
-
