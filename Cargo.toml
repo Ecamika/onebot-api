@@ -10,7 +10,7 @@ license = "MIT"
 license-file = "LICENSE"
 
 [dependencies]
-onebot-api-macros = { version = "0.1.0", path = "macros" }
+onebot-api-macros = { version = "0.1.1", path = "macros" }
 
 #async-stream = "0.3.6"
 async-trait = "0.1.89"
