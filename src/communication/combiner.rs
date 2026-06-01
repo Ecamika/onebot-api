@@ -3,6 +3,7 @@ use crate::error::{
 	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
 };
 use async_trait::async_trait;
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 /// 将事件接收与API发送分为两个不同服务实现
@@ -11,7 +12,7 @@ use tokio::task::JoinHandle;
 /// `send_side` 的事件通道由一个 processor task 负责  
 /// processor 将 `send_side` 的API响应事件并入原事件通道，其余事件丢弃
 /// # Examples
-/// ```rust
+/// ```no_run
 /// use std::time::Duration;
 /// use onebot_api::communication::http::HttpService;
 /// use onebot_api::communication::sse::SseService;
@@ -21,8 +22,17 @@ use tokio::task::JoinHandle;
 /// let http_service = HttpService::new("https://example.com", Some("example_token".to_string())).unwrap();
 /// let sse_service = SseService::new("https://example.com/_events", Some("example_token".to_string())).unwrap();
 /// let combiner = SplitCombiner::new(http_service, sse_service);
-/// let client = Client::new_with_options(combiner, Duration::from_secs(5), None, None);
+/// let mut client = Client::new_with_options(
+/// 	combiner,
+/// 	Some(Duration::from_secs(5)),
+/// 	None,
+/// 	None,
+/// 	None,
+/// 	None,
+/// );
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 /// client.start_service().await.unwrap();
+/// # });
 /// ```
 pub struct SplitCombiner<S: CommunicationService, R: CommunicationService> {
 	send_side: S,
@@ -30,7 +40,8 @@ pub struct SplitCombiner<S: CommunicationService, R: CommunicationService> {
 	event_process_sender: InternalEventSender,
 	event_process_receiver: InternalEventReceiver,
 	event_sender: Option<InternalEventSender>,
-	task_handle: Option<JoinHandle<()>>,
+	task_handle: Option<JoinHandle<ServiceRuntimeResult<()>>>,
+	task_state: Arc<ServiceTaskState>,
 }
 
 impl<S: CommunicationService, R: CommunicationService> Drop for SplitCombiner<S, R> {
@@ -49,6 +60,7 @@ impl<S: CommunicationService, R: CommunicationService> SplitCombiner<S, R> {
 			event_process_receiver,
 			event_sender: None,
 			task_handle: None,
+			task_state: Arc::new(ServiceTaskState::new()),
 		}
 	}
 }
@@ -79,6 +91,7 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		if let Some(handle) = self.task_handle.take() {
 			handle.abort();
 		}
+		self.task_state.stop();
 		self.send_side.stop();
 		self.read_side.stop();
 	}
@@ -103,20 +116,51 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 		if self.event_sender.is_none() {
 			return Err(ServiceStartError::NotInjectedEventSender);
 		}
+		if !self.task_state.try_start() {
+			return Err(ServiceStartError::TaskIsRunning);
+		}
+		self.task_state.clear_runtime_error();
 		let event_sender = self.event_sender.clone().unwrap();
 		let event_process_receiver = self.event_process_receiver.clone();
+		let task_state = self.task_state.clone();
 
 		self.task_handle = Some(tokio::spawn(async move {
-			processor(event_process_receiver, event_sender).await.ok();
+			let _guard = ServiceTaskGuard::new(task_state.clone());
+			match processor(event_process_receiver, event_sender).await {
+				Ok(()) => Ok(()),
+				Err(err) => {
+					task_state.record_runtime_error(err);
+					Ok(())
+				}
+			}
 		}));
 
-		futures::try_join!(self.send_side.start(), self.read_side.start())?;
+		if let Err(err) = self.send_side.start().await {
+			self.stop();
+			return Err(err);
+		}
+		if let Err(err) = self.read_side.start().await {
+			self.stop();
+			return Err(err);
+		}
 		Ok(())
 	}
 
 	async fn restart(&mut self) -> ServiceStartResult<()> {
-		futures::try_join!(self.send_side.restart(), self.read_side.restart())?;
-		Ok(())
+		self.stop();
+		self.start().await
+	}
+
+	fn is_running(&self) -> bool {
+		self.task_state.is_running() && self.send_side.is_running() && self.read_side.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self
+			.task_state
+			.take_runtime_error()
+			.or_else(|| self.send_side.take_runtime_error())
+			.or_else(|| self.read_side.take_runtime_error())
 	}
 }
 
@@ -170,5 +214,16 @@ impl<S: CommunicationService, R: CommunicationService> CommunicationService
 	async fn restart(&mut self) -> ServiceStartResult<()> {
 		futures::try_join!(self.send_side.restart(), self.read_side.restart())?;
 		Ok(())
+	}
+
+	fn is_running(&self) -> bool {
+		self.send_side.is_running() && self.read_side.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self
+			.send_side
+			.take_runtime_error()
+			.or_else(|| self.read_side.take_runtime_error())
 	}
 }

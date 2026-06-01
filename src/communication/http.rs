@@ -7,7 +7,6 @@ use reqwest::IntoUrl;
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::JoinHandle;
 use url::Url;
 
@@ -17,8 +16,8 @@ pub struct HttpService {
 	access_token: Option<String>,
 	api_receiver: Option<InternalAPIReceiver>,
 	event_sender: Option<InternalEventSender>,
-	task_handle: Option<JoinHandle<()>>,
-	is_running: Arc<AtomicBool>,
+	task_handle: Option<JoinHandle<ServiceRuntimeResult<()>>>,
+	task_state: Arc<ServiceTaskState>,
 }
 
 impl Clone for HttpService {
@@ -29,7 +28,7 @@ impl Clone for HttpService {
 			api_receiver: self.api_receiver.clone(),
 			event_sender: self.event_sender.clone(),
 			task_handle: None,
-			is_running: self.is_running.clone(),
+			task_state: self.task_state.clone(),
 		}
 	}
 }
@@ -49,7 +48,7 @@ impl HttpService {
 			api_receiver: None,
 			event_sender: None,
 			task_handle: None,
-			is_running: Arc::new(AtomicBool::new(false)),
+			task_state: Arc::new(ServiceTaskState::new()),
 		})
 	}
 
@@ -148,28 +147,47 @@ impl CommunicationService for HttpService {
 		if let Some(handle) = self.task_handle.take() {
 			handle.abort();
 		}
-		self.is_running.store(false, Ordering::Relaxed);
+		self.task_state.stop();
 	}
 
 	async fn start(&mut self) -> ServiceStartResult<()> {
-		if self.is_running.load(Ordering::Relaxed) {
+		if !self.task_state.try_start() {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
 
 		if self.api_receiver.is_none() && self.event_sender.is_none() {
+			self.task_state.stop();
 			return Err(ServiceStartError::NotInjected);
 		} else if self.event_sender.is_none() {
+			self.task_state.stop();
 			return Err(ServiceStartError::NotInjectedEventSender);
 		} else if self.api_receiver.is_none() {
+			self.task_state.stop();
 			return Err(ServiceStartError::NotInjectedAPIReceiver);
 		}
 
-		self.is_running.store(true, Ordering::Relaxed);
+		self.task_state.clear_runtime_error();
 		let service = self.clone();
+		let task_state = self.task_state.clone();
 		self.task_handle = Some(tokio::spawn(async move {
-			service.api_processor().await.ok();
+			let _guard = ServiceTaskGuard::new(task_state.clone());
+			match service.api_processor().await {
+				Ok(()) => Ok(()),
+				Err(err) => {
+					task_state.record_runtime_error(err);
+					Ok(())
+				}
+			}
 		}));
 
 		Ok(())
+	}
+
+	fn is_running(&self) -> bool {
+		self.task_state.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self.task_state.take_runtime_error()
 	}
 }

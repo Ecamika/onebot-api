@@ -1,5 +1,7 @@
 use super::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{
+	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
+};
 use async_trait::async_trait;
 use axum::Router;
 use axum::extract::State;
@@ -9,7 +11,6 @@ use hmac::{Hmac, KeyInit, Mac};
 use http::{HeaderMap, StatusCode};
 use sha1::Sha1;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::task::JoinHandle;
 
@@ -19,9 +20,9 @@ pub struct HttpPostService<T: ToSocketAddrs + Clone + Send + Sync> {
 	addr: T,
 	hmac: Option<HmacSha1>,
 	event_sender: Option<InternalEventSender>,
-	task_handle: Option<JoinHandle<()>>,
+	task_handle: Option<JoinHandle<ServiceRuntimeResult<()>>>,
 	prefix: String,
-	is_running: Arc<AtomicBool>,
+	task_state: Arc<ServiceTaskState>,
 }
 
 impl<T: ToSocketAddrs + Clone + Send + Sync> Drop for HttpPostService<T> {
@@ -47,7 +48,7 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> HttpPostService<T> {
 			event_sender: None,
 			task_handle: None,
 			prefix,
-			is_running: Arc::new(AtomicBool::new(false)),
+			task_state: Arc::new(ServiceTaskState::new()),
 		})
 	}
 }
@@ -68,19 +69,21 @@ async fn processor(
 	State(state): State<Arc<AppState>>,
 	body: String,
 ) -> impl IntoResponse {
-	if state.hmac.is_some() {
-		let received_sig = headers.get("X-Signature").map(|v| v.to_str().unwrap());
-		if received_sig.is_none() {
+	if let Some(hmac) = state.hmac.clone() {
+		let Some(received_sig) = headers.get("X-Signature") else {
 			return StatusCode::UNAUTHORIZED;
-		}
-		let received_sig = received_sig.unwrap();
-		let hmac = state.hmac.clone().unwrap();
+		};
+		let Ok(received_sig) = received_sig.to_str() else {
+			return StatusCode::BAD_REQUEST;
+		};
 		let sig = get_sig(hmac, body.as_ref());
 		if received_sig != "sha1=".to_string() + sig.as_str() {
 			return StatusCode::FORBIDDEN;
 		}
 	}
-	let event = serde_json::from_str(&body).unwrap();
+	let Ok(event) = serde_json::from_str(&body) else {
+		return StatusCode::BAD_REQUEST;
+	};
 	let _ = state.event_sender.send_async(event).await;
 	StatusCode::NO_CONTENT
 }
@@ -100,18 +103,20 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for HttpPostSe
 		if let Some(handle) = self.task_handle.take() {
 			handle.abort();
 		}
-		self.is_running.store(false, Ordering::Relaxed);
+		self.task_state.stop();
 	}
 
 	async fn start(&mut self) -> ServiceStartResult<()> {
-		if self.is_running.load(Ordering::Relaxed) {
+		if !self.task_state.try_start() {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
 
 		if self.event_sender.is_none() {
+			self.task_state.stop();
 			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 
+		self.task_state.clear_runtime_error();
 		let event_sender = self.event_sender.clone().unwrap();
 
 		let state = Arc::new(AppState {
@@ -119,16 +124,40 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for HttpPostSe
 			hmac: self.hmac.clone(),
 		});
 
-		let listener = TcpListener::bind(self.addr.clone()).await?;
+		let listener = match TcpListener::bind(self.addr.clone()).await {
+			Ok(listener) => listener,
+			Err(err) => {
+				self.task_state.stop();
+				return Err(err.into());
+			}
+		};
 		let router = Router::new()
 			.route(&self.prefix, any(processor))
 			.with_state(state);
 
-		self.is_running.store(true, Ordering::Relaxed);
+		let task_state = self.task_state.clone();
 		self.task_handle = Some(tokio::spawn(async move {
-			axum::serve(listener, router).await.ok();
+			let _guard = ServiceTaskGuard::new(task_state.clone());
+			match axum::serve(listener, router)
+				.await
+				.map_err(ServiceRuntimeError::from)
+			{
+				Ok(()) => Ok(()),
+				Err(err) => {
+					task_state.record_runtime_error(err);
+					Ok(())
+				}
+			}
 		}));
 
 		Ok(())
+	}
+
+	fn is_running(&self) -> bool {
+		self.task_state.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self.task_state.take_runtime_error()
 	}
 }

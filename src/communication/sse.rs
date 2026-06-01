@@ -8,7 +8,6 @@ use eventsource_stream::{EventStream, Eventsource};
 use futures::{Stream, StreamExt};
 use reqwest::IntoUrl;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::JoinHandle;
 use url::Url;
 
@@ -17,8 +16,8 @@ pub struct SseService {
 	url: Url,
 	access_token: Option<String>,
 	event_sender: Option<InternalEventSender>,
-	task_handle: Option<JoinHandle<()>>,
-	is_running: Arc<AtomicBool>,
+	task_handle: Option<JoinHandle<ServiceRuntimeResult<()>>>,
+	task_state: Arc<ServiceTaskState>,
 	// auto_reconnect: bool,
 	// reconnect_interval: Duration,
 	// reconnect_signal_sender: broadcast::Sender<()>
@@ -31,7 +30,7 @@ impl Clone for SseService {
 			access_token: self.access_token.clone(),
 			event_sender: self.event_sender.clone(),
 			task_handle: None,
-			is_running: self.is_running.clone(),
+			task_state: self.task_state.clone(),
 		}
 	}
 }
@@ -54,7 +53,7 @@ impl SseService {
 			access_token,
 			event_sender: None,
 			task_handle: None,
-			is_running: Arc::new(AtomicBool::new(false)),
+			task_state: Arc::new(ServiceTaskState::new()),
 			// auto_reconnect: auto_reconnect.unwrap_or(true),
 			// reconnect_interval: reconnect_interval.unwrap_or(Duration::from_secs(10)),
 			// reconnect_signal_sender
@@ -106,24 +105,41 @@ impl CommunicationService for SseService {
 		if let Some(handle) = self.task_handle.take() {
 			handle.abort();
 		}
-		self.is_running.store(false, Ordering::Relaxed);
+		self.task_state.stop();
 	}
 
 	async fn start(&mut self) -> ServiceStartResult<()> {
-		if self.is_running.load(Ordering::Relaxed) {
+		if !self.task_state.try_start() {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
 
 		if self.event_sender.is_none() {
+			self.task_state.stop();
 			return Err(ServiceStartError::NotInjectedEventSender);
 		}
 
-		self.is_running.store(true, Ordering::Relaxed);
+		self.task_state.clear_runtime_error();
 		let service = self.clone();
+		let task_state = self.task_state.clone();
 		self.task_handle = Some(tokio::spawn(async move {
-			service.eventsource_listener().await.ok();
+			let _guard = ServiceTaskGuard::new(task_state.clone());
+			match service.eventsource_listener().await {
+				Ok(()) => Ok(()),
+				Err(err) => {
+					task_state.record_runtime_error(err);
+					Ok(())
+				}
+			}
 		}));
 
 		Ok(())
+	}
+
+	fn is_running(&self) -> bool {
+		self.task_state.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self.task_state.take_runtime_error()
 	}
 }

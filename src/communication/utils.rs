@@ -17,6 +17,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use strum::EnumIs;
@@ -60,6 +61,61 @@ type ArcAPIRequestRegistry = Arc<Mutex<BTreeMap<String, InternalAPIResponseSende
 // pub type ArcNormalEvent = Arc<NormalEvent>;
 
 pub const DEFAULT_CHANNEL_CAP: usize = 16;
+
+#[derive(Debug, Default)]
+pub(crate) struct ServiceTaskState {
+	is_running: AtomicBool,
+	last_runtime_error: Mutex<Option<ServiceRuntimeError>>,
+}
+
+impl ServiceTaskState {
+	pub(crate) fn new() -> Self {
+		Self::default()
+	}
+
+	pub(crate) fn try_start(&self) -> bool {
+		self
+			.is_running
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+			.is_ok()
+	}
+
+	pub(crate) fn stop(&self) {
+		self.is_running.store(false, Ordering::Release);
+	}
+
+	pub(crate) fn clear_runtime_error(&self) {
+		*self.last_runtime_error.lock().unwrap() = None;
+	}
+
+	pub(crate) fn record_runtime_error(&self, err: ServiceRuntimeError) {
+		*self.last_runtime_error.lock().unwrap() = Some(err);
+	}
+
+	pub(crate) fn take_runtime_error(&self) -> Option<ServiceRuntimeError> {
+		self.last_runtime_error.lock().unwrap().take()
+	}
+
+	pub(crate) fn is_running(&self) -> bool {
+		self.is_running.load(Ordering::Acquire)
+	}
+}
+
+pub(crate) struct ServiceTaskGuard {
+	state: Arc<ServiceTaskState>,
+}
+
+impl ServiceTaskGuard {
+	pub(crate) fn new(state: Arc<ServiceTaskState>) -> Self {
+		Self { state }
+	}
+}
+
+impl Drop for ServiceTaskGuard {
+	fn drop(&mut self) {
+		self.state.stop();
+	}
+}
 
 impl EventTrait for APIResponse {}
 // impl EventTrait for ArcNormalEvent {}
@@ -130,6 +186,14 @@ pub trait CommunicationService: Sync + Send {
 		self.stop();
 		self.start().await
 	}
+
+	fn is_running(&self) -> bool {
+		false
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		None
+	}
 }
 
 #[async_trait]
@@ -153,6 +217,14 @@ impl CommunicationService for Box<dyn CommunicationService> {
 	async fn restart(&mut self) -> ServiceStartResult<()> {
 		(**self).restart().await
 	}
+
+	fn is_running(&self) -> bool {
+		(**self).is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		(**self).take_runtime_error()
+	}
 }
 
 pub trait IntoService {
@@ -169,14 +241,26 @@ impl<T: CommunicationService + 'static> IntoService for T {
 /// 需要具体实现 [`CommunicationService`] 的底层服务支持
 ///
 /// # Examples
-/// ```rust
+/// ```no_run
 /// use std::time::Duration;
 /// use onebot_api::communication::utils::Client;
 /// use onebot_api::communication::ws::WsService;
 ///
-/// let ws_service = WsService::new_with_options("wss://example.com", Some("example_token".to_string())).unwrap();
-/// let client = Client::new_with_options(ws_service, Duration::from_secs(5), None, None);
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// let ws_service = WsService::builder("wss://example.com")
+/// 	.unwrap()
+/// 	.access_token("example_token".to_string())
+/// 	.build();
+/// let mut client = Client::new_with_options(
+/// 	ws_service,
+/// 	Some(Duration::from_secs(5)),
+/// 	None,
+/// 	None,
+/// 	None,
+/// 	None,
+/// );
 /// client.start_service().await.unwrap();
+/// # });
 /// ```
 pub struct Client {
 	service: Box<dyn CommunicationService>,
@@ -277,6 +361,14 @@ impl Drop for Client {
 impl Client {
 	pub fn get_normal_event_receiver(&self) -> PublicEventReceiver {
 		self.public_event_receiver.clone()
+	}
+
+	pub fn is_service_running(&self) -> bool {
+		self.service.is_running()
+	}
+
+	pub fn take_service_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self.service.take_runtime_error()
 	}
 }
 
@@ -413,19 +505,31 @@ impl Client {
 	/// 即使在原服务启动后也可以更换服务
 	///
 	/// # Examples
-	/// ```rust
+	/// ```no_run
 	/// use std::time::Duration;
 	/// use onebot_api::communication::utils::Client;
 	/// use onebot_api::communication::ws::WsService;
 	/// use onebot_api::communication::ws_reverse::WsReverseService;
 	///
-	/// let ws_service = WsService::new_with_options("wss://example.com", Some("example_token".to_string())).unwrap();
-	/// let mut client = Client::new_with_options(ws_service, Duration::from_secs(5), None, None);
+	/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+	/// let ws_service = WsService::builder("wss://example.com")
+	/// 	.unwrap()
+	/// 	.access_token("example_token".to_string())
+	/// 	.build();
+	/// let mut client = Client::new_with_options(
+	/// 	ws_service,
+	/// 	Some(Duration::from_secs(5)),
+	/// 	None,
+	/// 	None,
+	/// 	None,
+	/// 	None,
+	/// );
 	/// client.start_service().await.unwrap();
 	///
 	/// let ws_reverse_service = WsReverseService::new("0.0.0.0:8080", Some("example_token".to_string()));
 	/// client.change_service(ws_reverse_service);
 	/// client.start_service().await.unwrap();
+	/// # });
 	/// ```
 	pub fn change_service(&mut self, service: impl IntoService) -> Box<dyn CommunicationService> {
 		let mut service = Box::new(service.into());
@@ -519,14 +623,23 @@ impl Client {
 	/// - `params` 调用 `action` 所需要的参数
 	///
 	/// # Examples
-	/// ```rust
+	/// ```no_run
 	/// use std::time::Duration;
 	/// use serde_json::{json, Value};
 	/// use onebot_api::communication::utils::Client;
 	/// use onebot_api::communication::ws::WsService;
 	///
-	/// let client: Client = Client::new_with_options(WsService::new_with_options("ws://localhost:8080", None).unwrap(), Some(Duration::from_secs(5)), None, None);
+	/// let client: Client = Client::new_with_options(
+	/// 	WsService::builder("ws://localhost:8080").unwrap().build(),
+	/// 	Some(Duration::from_secs(5)),
+	/// 	None,
+	/// 	None,
+	/// 	None,
+	/// 	None,
+	/// );
+	/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
 	/// let response: Value =  client.send_and_parse("send_like", json!({})).await.unwrap();
+	/// # });
 	/// ```
 	pub async fn send_and_parse<T: DeserializeOwned>(
 		&self,

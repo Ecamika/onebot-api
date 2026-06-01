@@ -1,9 +1,10 @@
 use super::utils::*;
-use crate::error::{ServiceStartError, ServiceStartResult};
+use crate::error::{
+	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
+};
 use async_trait::async_trait;
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
@@ -59,9 +60,9 @@ pub struct WsService {
 	url: Url,
 	api_receiver: Option<InternalAPIReceiver>,
 	event_sender: Option<InternalEventSender>,
-	task_handle: Option<JoinHandle<()>>,
+	task_handle: Option<JoinHandle<ServiceRuntimeResult<()>>>,
 	reconnect_interval: Duration,
-	is_running: Arc<AtomicBool>,
+	task_state: Arc<ServiceTaskState>,
 }
 
 impl Clone for WsService {
@@ -72,7 +73,7 @@ impl Clone for WsService {
 			event_sender: self.event_sender.clone(),
 			task_handle: None,
 			reconnect_interval: self.reconnect_interval,
-			is_running: self.is_running.clone(),
+			task_state: self.task_state.clone(),
 		}
 	}
 }
@@ -102,7 +103,7 @@ impl WsService {
 			event_sender: None,
 			task_handle: None,
 			reconnect_interval: reconnect_interval.unwrap_or(Duration::from_secs(10)),
-			is_running: Arc::new(AtomicBool::new(false)),
+			task_state: Arc::new(ServiceTaskState::new()),
 		}
 	}
 
@@ -138,14 +139,6 @@ impl WsService {
 	}
 
 	pub async fn spawn_processor(&mut self) -> ServiceStartResult<()> {
-		struct IsRunningGuard(Arc<AtomicBool>);
-		impl Drop for IsRunningGuard {
-			fn drop(&mut self) {
-				self.0.store(false, Ordering::Relaxed);
-			}
-		}
-		let is_running_guard = IsRunningGuard(self.is_running.clone());
-
 		let (api_receiver, event_sender) = match (&self.api_receiver, &self.event_sender) {
 			(Some(api_receiver), Some(event_sender)) => (api_receiver.clone(), event_sender.clone()),
 			(None, None) => return Err(ServiceStartError::NotInjected),
@@ -157,13 +150,14 @@ impl WsService {
 		let mut ws = Self::connect(&url).await?;
 
 		let reconnect_interval = self.reconnect_interval;
+		let task_state = self.task_state.clone();
 		self.task_handle = Some(tokio::spawn(async move {
-			let _is_running_guard = is_running_guard;
+			let _guard = ServiceTaskGuard::new(task_state.clone());
 
 			'handle_connection: loop {
 				let result = Self::handle_connection(&api_receiver, &event_sender, ws).await;
 				if let Ok(ControlFlow::Break(())) = result {
-					break;
+					return Ok(());
 				}
 				loop {
 					tokio::time::sleep(reconnect_interval).await;
@@ -199,15 +193,27 @@ impl CommunicationService for WsService {
 		if let Some(handle) = self.task_handle.take() {
 			handle.abort();
 		}
-		self.is_running.store(false, Ordering::Relaxed);
+		self.task_state.stop();
 	}
 
 	async fn start(&mut self) -> ServiceStartResult<()> {
-		if self.is_running.swap(true, Ordering::Relaxed) {
+		if !self.task_state.try_start() {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
 
-		self.spawn_processor().await?;
+		self.task_state.clear_runtime_error();
+		if let Err(err) = self.spawn_processor().await {
+			self.task_state.stop();
+			return Err(err);
+		}
 		Ok(())
+	}
+
+	fn is_running(&self) -> bool {
+		self.task_state.is_running()
+	}
+
+	fn take_runtime_error(&mut self) -> Option<ServiceRuntimeError> {
+		self.task_state.take_runtime_error()
 	}
 }

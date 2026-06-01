@@ -48,6 +48,8 @@ pub enum ServiceStartError {
 pub enum ServiceRuntimeError {
 	#[error("unknown error")]
 	Unknown(Box<dyn Error + Send + Sync>),
+	#[error("io error")]
+	Io(#[from] tokio::io::Error),
 	#[error("internal channel closed")]
 	ChannelClosed,
 	#[error("serialization/deserialization failed")]
