@@ -1,22 +1,22 @@
 use super::utils::*;
-use crate::error::{
-	ServiceRuntimeError, ServiceRuntimeResult, ServiceStartError, ServiceStartResult,
-};
+use crate::error::{ServiceRuntimeResult, ServiceStartError, ServiceStartResult};
 use async_trait::async_trait;
 use axum::Router;
 use axum::body::Body;
-use axum::extract::ws::{Message, WebSocket};
+use axum::extract::ws::WebSocket;
 use axum::extract::{State, WebSocketUpgrade};
 use axum::response::Response;
 use axum::routing::any;
-use futures::stream::{SplitSink, SplitStream};
-use futures::{SinkExt, StreamExt};
 use http::{HeaderMap, StatusCode};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio::task::JoinHandle;
+use tokio::task::{AbortHandle, JoinHandle};
+
+mod transfer;
+
+use transfer::ReverseWsTransfer;
 
 pub struct WsReverseService<T: ToSocketAddrs + Clone + Send + Sync> {
 	api_receiver: Option<InternalAPIReceiver>,
@@ -53,51 +53,38 @@ struct AppState {
 	api_receiver: InternalAPIReceiver,
 	event_sender: InternalEventSender,
 	connected: Arc<AtomicBool>,
-	connection_handle: Arc<Mutex<Option<JoinHandle<ServiceRuntimeResult<()>>>>>,
+	connection_handle: Arc<Mutex<Option<AbortHandle>>>,
 }
 
-async fn send_processor(
-	mut send_side: SplitSink<WebSocket, Message>,
-	api_receiver: InternalAPIReceiver,
-) -> ServiceRuntimeResult<()> {
-	loop {
-		match api_receiver.recv_async().await {
-			Ok(data) => {
-				let str = serde_json::to_string(&data);
-				if str.is_err() {
-					continue;
-				}
-				let _ = send_side.send(Message::Text(str?.into())).await;
-			}
-			Err(_) => return Err(ServiceRuntimeError::ChannelClosed),
-		}
-	}
+fn empty_response(status: StatusCode) -> Response {
+	Response::builder()
+		.status(status)
+		.body(Body::from(""))
+		.unwrap()
 }
 
-async fn read_processor(
-	mut read_side: SplitStream<WebSocket>,
-	event_sender: InternalEventSender,
-) -> ServiceRuntimeResult<()> {
-	loop {
-		match read_side.next().await {
-			Some(Ok(msg)) => match msg {
-				Message::Text(data) => {
-					let str = data.as_str();
-					let event = serde_json::from_str::<DeserializedEvent>(str);
-					if event.is_err() {
-						continue;
-					}
-					let _ = event_sender.send_async(event?).await;
-				}
-				Message::Close(_) => {
-					return Err(ServiceRuntimeError::WebSocketClosedByPeer);
-				}
-				_ => (),
-			},
-			Some(Err(_)) => return Err(ServiceRuntimeError::WebSocketError),
-			None => return Err(ServiceRuntimeError::WebSocketStreamEnded),
+async fn run_connection(state: Arc<AppState>, socket: WebSocket) -> ServiceRuntimeResult<()> {
+	struct ConnectionGuard {
+		connected: Arc<AtomicBool>,
+		connection_handle: Arc<Mutex<Option<AbortHandle>>>,
+	}
+
+	impl Drop for ConnectionGuard {
+		fn drop(&mut self) {
+			*self.connection_handle.lock().unwrap() = None;
+			self.connected.store(false, Ordering::Release);
 		}
 	}
+
+	let _guard = ConnectionGuard {
+		connected: state.connected.clone(),
+		connection_handle: state.connection_handle.clone(),
+	};
+
+	let api_receiver = state.api_receiver.clone();
+	let event_sender = state.event_sender.clone();
+	let transfer = ReverseWsTransfer::new(socket, &api_receiver, &event_sender);
+	transfer.await
 }
 
 async fn handler(
@@ -105,41 +92,33 @@ async fn handler(
 	State(state): State<Arc<AppState>>,
 	ws: WebSocketUpgrade,
 ) -> Response {
-	if state.connected.load(Ordering::Relaxed) {
-		return Response::builder()
-			.status(StatusCode::FORBIDDEN)
-			.body(Body::from(""))
-			.unwrap();
-	}
 	if state.access_token.is_some() {
-		let received_token = headers.get("Authorization").map(|v| v.to_str().unwrap());
+		let received_token = headers.get("Authorization").and_then(|v| v.to_str().ok());
 		if received_token.is_none() {
-			return Response::builder()
-				.status(StatusCode::UNAUTHORIZED)
-				.body(Body::from(""))
-				.unwrap();
+			return empty_response(StatusCode::UNAUTHORIZED);
 		}
 		let received_token = received_token.unwrap();
 		let access_token = state.access_token.clone().unwrap();
 		if received_token != "Bearer ".to_string() + &access_token {
-			return Response::builder()
-				.status(StatusCode::FORBIDDEN)
-				.body(Body::from(""))
-				.unwrap();
+			return empty_response(StatusCode::FORBIDDEN);
 		}
 	}
-	ws.on_upgrade(async move |socket: WebSocket| {
-		let (send_side, read_side) = socket.split();
-		let api_receiver = state.api_receiver.clone();
-		let event_sender = state.event_sender.clone();
-		state.connected.store(true, Ordering::Relaxed);
-		let handle = tokio::spawn(async move {
-			tokio::select! {
-				r = send_processor(send_side, api_receiver) => r,
-				r = read_processor(read_side, event_sender) => r,
-			}
-		});
-		*state.connection_handle.lock().unwrap() = Some(handle);
+	if state
+		.connected
+		.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+		.is_err()
+	{
+		return empty_response(StatusCode::FORBIDDEN);
+	}
+
+	let failed_state = state.clone();
+	ws.on_failed_upgrade(move |_error| {
+		*failed_state.connection_handle.lock().unwrap() = None;
+		failed_state.connected.store(false, Ordering::Release);
+	})
+	.on_upgrade(move |socket: WebSocket| async move {
+		let handle = tokio::spawn(run_connection(state.clone(), socket));
+		*state.connection_handle.lock().unwrap() = Some(handle.abort_handle());
 	})
 }
 
@@ -161,15 +140,16 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for WsReverseS
 			&& let Some(handle) = state.connection_handle.lock().unwrap().take()
 		{
 			handle.abort();
+			state.connected.store(false, Ordering::Release);
 		}
 		if let Some(handle) = self.serve_handle.take() {
 			handle.abort();
 		}
-		self.is_running.store(false, Ordering::Relaxed);
+		self.is_running.store(false, Ordering::Release);
 	}
 
 	async fn start(&mut self) -> ServiceStartResult<()> {
-		if self.is_running.load(Ordering::Relaxed) {
+		if self.is_running.load(Ordering::Acquire) {
 			return Err(ServiceStartError::TaskIsRunning);
 		}
 
@@ -196,7 +176,7 @@ impl<T: ToSocketAddrs + Clone + Send + Sync> CommunicationService for WsReverseS
 		let listener = TcpListener::bind(self.addr.clone()).await?;
 		let router = Router::new().fallback(any(handler)).with_state(state);
 
-		self.is_running.store(true, Ordering::Relaxed);
+		self.is_running.store(true, Ordering::Release);
 		self.serve_handle = Some(tokio::spawn(async move {
 			axum::serve(listener, router).await.ok();
 		}));

@@ -156,7 +156,7 @@ fn generate_struct_selector(
 	let selector_impl = quote! {
 		#[cfg(feature = "selector")]
 		impl #impl_generics #name #ty_generics #where_clause {
-			pub fn selector(&'_ self) -> crate::selector::Selector<'_, Self> {
+			pub const fn selector(&'_ self) -> crate::selector::Selector<'_, Self> {
 				crate::selector::Selector { data: Some(self) }
 			}
 		}
@@ -214,7 +214,7 @@ fn generate_struct_selector(
 				let and_not_variant = format_ident!("and_not_{}", variant);
 
 				filter_methods.push(quote! {
-					pub fn #variant(&mut self) {
+					pub const fn #variant(&mut self) {
 						if let Some(data) = self.data
 							&& !data.#field_name.#is_method()
 						{
@@ -222,12 +222,12 @@ fn generate_struct_selector(
 						}
 					}
 
-					pub fn #and_variant(mut self) -> Self {
+					pub const fn #and_variant(mut self) -> Self {
 						self.#variant();
 						self
 					}
 
-					pub fn #not_variant(&mut self) {
+					pub const fn #not_variant(&mut self) {
 						if let Some(data) = self.data
 							&& data.#field_name.#is_method()
 						{
@@ -235,7 +235,7 @@ fn generate_struct_selector(
 						}
 					}
 
-					pub fn #and_not_variant(mut self) -> Self {
+					pub const fn #and_not_variant(mut self) -> Self {
 						self.#not_variant();
 						self
 					}
@@ -264,32 +264,6 @@ fn generate_struct_selector(
 	let selector_methods = quote! {
 		#[cfg(feature = "selector")]
 		impl<'a> crate::selector::Selector<'a, #name> {
-			pub fn filter(&mut self, f: impl FnOnce(&#name) -> bool) {
-				if let Some(data) = self.data
-					&& !f(data)
-				{
-					self.data = None
-				}
-			}
-
-			pub fn and_filter(mut self, f: impl FnOnce(&#name) -> bool) -> Self {
-				self.filter(f);
-				self
-			}
-
-			pub async fn filter_async(&mut self, f: impl AsyncFnOnce(&#name) -> bool) {
-				if let Some(data) = self.data
-					&& !f(data).await
-				{
-					self.data = None
-				}
-			}
-
-			pub async fn and_filter_async(mut self, f: impl AsyncFnOnce(&#name) -> bool) -> Self {
-				self.filter_async(f).await;
-				self
-			}
-
 			#(#filter_methods)*
 		}
 	};
@@ -326,7 +300,7 @@ fn generate_enum_selector(
 				let on_async_name = format_ident!("on_{}_async", snake_name);
 
 				match_methods.push(quote! {
-					pub fn #match_name(&self) -> Option<&#field_ty> {
+					pub const fn #match_name(&self) -> Option<&#field_ty> {
 						if let Self::#variant_name(data) = self {
 							Some(data)
 						} else {
@@ -365,7 +339,7 @@ fn generate_enum_selector(
 	let expanded = quote! {
 		#[cfg(feature = "selector")]
 		impl #impl_generics #name #ty_generics #where_clause {
-			pub fn selector(&'_ self) -> crate::selector::Selector<'_, Self> {
+			pub const fn selector(&'_ self) -> crate::selector::Selector<'_, Self> {
 				crate::selector::Selector { data: Some(self) }
 			}
 
@@ -374,32 +348,6 @@ fn generate_enum_selector(
 
 		#[cfg(feature = "selector")]
 		impl<'a> crate::selector::Selector<'a, #name> {
-			pub fn filter(&mut self, f: impl FnOnce(&#name) -> bool) {
-				if let Some(data) = self.data
-					&& !f(data)
-				{
-					self.data = None
-				}
-			}
-
-			pub fn and_filter(mut self, f: impl FnOnce(&#name) -> bool) -> Self {
-				self.filter(f);
-				self
-			}
-
-			pub async fn filter_async(&mut self, f: impl AsyncFnOnce(&#name) -> bool) {
-				if let Some(data) = self.data
-					&& !f(data).await
-				{
-					self.data = None
-				}
-			}
-
-			pub async fn and_filter_async(mut self, f: impl AsyncFnOnce(&#name) -> bool) -> Self {
-				self.filter_async(f).await;
-				self
-			}
-
 			#(#selector_variant_methods)*
 		}
 	};
