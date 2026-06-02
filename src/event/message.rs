@@ -28,7 +28,7 @@ pub struct PrivateMessageSender {
 	pub user_id: Option<i64>,
 	pub nickname: Option<String>,
 	pub sex: Option<Sex>,
-	pub age: Option<i32>,
+	pub age: Option<i64>,
 }
 
 #[cfg(feature = "quick_operation")]
@@ -39,7 +39,7 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for PrivateMessageSender {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		api
 			.send_private_msg(
 				self.user_id.ok_or(APIRequestError::MissingParameters)?,
@@ -73,7 +73,7 @@ pub struct GroupMessageSender {
 	pub nickname: Option<String>,
 	pub card: Option<String>,
 	pub sex: Option<Sex>,
-	pub age: Option<i32>,
+	pub age: Option<i64>,
 	pub area: Option<String>,
 	pub level: Option<String>,
 	pub role: Option<GroupMessageSenderRole>,
@@ -88,7 +88,7 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for GroupMessageSender {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		api
 			.send_private_msg(
 				self.user_id.ok_or(APIRequestError::MissingParameters)?,
@@ -124,11 +124,11 @@ pub enum GroupMessageSubType {
 pub struct MessageEventPrivate {
 	#[cfg_attr(feature = "selector", selector(variants(friend, group, other)))]
 	pub sub_type: PrivateMessageSubType,
-	pub message_id: i32,
+	pub message_id: i64,
 	pub user_id: i64,
 	pub message: Vec<ReceiveSegment>,
 	pub raw_message: String,
-	pub font: i32,
+	pub font: i64,
 	pub sender: PrivateMessageSender,
 }
 
@@ -140,7 +140,7 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for MessageEventPrivate {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		api.send_private_msg(self.user_id, msg, auto_escape).await
 	}
 }
@@ -158,13 +158,13 @@ impl<T: APISender + Send + Sync> QuickDeleteMsg<T> for MessageEventPrivate {
 pub struct MessageEventGroup {
 	#[cfg_attr(feature = "selector", selector(variants(normal, anonymous, notice)))]
 	pub sub_type: GroupMessageSubType,
-	pub message_id: i32,
+	pub message_id: i64,
 	pub group_id: i64,
 	pub user_id: i64,
 	pub anonymous: Option<GroupMessageAnonymous>,
 	pub message: Vec<ReceiveSegment>,
 	pub raw_message: String,
-	pub font: i32,
+	pub font: i64,
 	pub sender: GroupMessageSender,
 }
 
@@ -176,7 +176,7 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for MessageEventGroup {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		api.send_group_msg(self.group_id, msg, auto_escape).await
 	}
 }
@@ -189,7 +189,7 @@ impl<T: APISender + Send + Sync> QuickReplyAt<T> for MessageEventGroup {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		let mut full_msg = vec![SendSegment::At {
 			data: AtData {
 				qq: AtType::Id(self.user_id.to_string()),
@@ -216,8 +216,8 @@ impl<T: APISender + Send + Sync> QuickKick<T> for MessageEventGroup {
 	async fn kick(&self, api: &T, reject_add_request: Option<bool>) -> APIResult<()> {
 		api
 			.set_group_kick(
-				self.group_id as i32,
-				self.user_id as i32,
+				self.group_id as i64,
+				self.user_id as i64,
 				reject_add_request,
 			)
 			.await
@@ -227,9 +227,9 @@ impl<T: APISender + Send + Sync> QuickKick<T> for MessageEventGroup {
 #[cfg(feature = "quick_operation")]
 #[async_trait]
 impl<T: APISender + Send + Sync> QuickBan<T> for MessageEventGroup {
-	async fn ban(&self, api: &T, duration: Option<i32>) -> APIResult<()> {
+	async fn ban(&self, api: &T, duration: Option<i64>) -> APIResult<()> {
 		api
-			.set_group_ban(self.group_id as i32, self.user_id as i32, duration)
+			.set_group_ban(self.group_id as i64, self.user_id as i64, duration)
 			.await
 	}
 }
@@ -253,7 +253,7 @@ impl<T: APISender + Send + Sync> QuickSendMsg<T> for MessageEvent {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 		match self {
 			Self::Group(data) => data.send_msg(api, msg, auto_escape),
 			Self::Private(data) => data.send_msg(api, msg, auto_escape),

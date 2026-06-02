@@ -47,7 +47,7 @@ impl SegmentBuilder {
 		image_type: Option<ImageType>,
 		cache: Option<bool>,
 		proxy: Option<bool>,
-		timeout: Option<i32>,
+		timeout: Option<i64>,
 	) -> Self {
 		self.and_push(ImageData {
 			file: file.to_string(),
@@ -72,7 +72,7 @@ impl SegmentBuilder {
 		magic: Option<String>,
 		cache: Option<bool>,
 		proxy: Option<bool>,
-		timeout: Option<i32>,
+		timeout: Option<i64>,
 	) -> Self {
 		self.and_push(RecordData {
 			file: file.to_string(),
@@ -92,7 +92,7 @@ impl SegmentBuilder {
 		file: impl ToString,
 		cache: Option<bool>,
 		proxy: Option<bool>,
-		timeout: Option<i32>,
+		timeout: Option<i64>,
 	) -> Self {
 		self.and_push(VideoData {
 			file: file.to_string(),

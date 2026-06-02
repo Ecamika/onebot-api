@@ -665,7 +665,7 @@ impl APISenderTrait for Client {
 		user_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 	}
 
 	#[api(extract = "message_id", response = SendMsgResponse)]
@@ -674,7 +674,7 @@ impl APISenderTrait for Client {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 	}
 
 	#[api(extract = "message_id", response = SendMsgResponse)]
@@ -685,73 +685,73 @@ impl APISenderTrait for Client {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32> {
+	) -> APIResult<i64> {
 	}
 
-	async fn delete_msg(&self, message_id: i32) -> APIResult<()> {}
+	async fn delete_msg(&self, message_id: i64) -> APIResult<()> {}
 
-	async fn get_msg(&self, message_id: i32) -> APIResult<GetMsgResponse> {}
+	async fn get_msg(&self, message_id: i64) -> APIResult<GetMsgResponse> {}
 
 	#[api(extract = "message", response = GetForwardMsgResponse)]
 	async fn get_forward_msg(&self, id: String) -> APIResult<Vec<ReceiveSegment>> {}
 
-	async fn send_like(&self, user_id: i64, times: Option<i32>) -> APIResult<()> {}
+	async fn send_like(&self, user_id: i64, times: Option<i64>) -> APIResult<()> {}
 
 	async fn set_group_kick(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		reject_add_request: Option<bool>,
 	) -> APIResult<()> {
 	}
 
 	async fn set_group_ban(
 		&self,
-		group_id: i32,
-		user_id: i32,
-		duration: Option<i32>,
+		group_id: i64,
+		user_id: i64,
+		duration: Option<i64>,
 	) -> APIResult<()> {
 	}
 
 	async fn set_group_anonymous_ban(
 		&self,
-		group_id: i32,
+		group_id: i64,
 		anonymous: Option<GroupMessageAnonymous>,
 		flag: Option<String>,
-		duration: Option<i32>,
+		duration: Option<i64>,
 	) -> APIResult<()> {
 	}
 
-	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {}
+	async fn set_group_whole_ban(&self, group_id: i64, enable: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_admin(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		enable: Option<bool>,
 	) -> APIResult<()> {
 	}
 
-	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> APIResult<()> {}
+	async fn set_group_anonymous(&self, group_id: i64, enable: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_card(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		card: Option<String>,
 	) -> APIResult<()> {
 	}
 
-	async fn set_group_name(&self, group_id: i32, group_name: String) -> APIResult<()> {}
+	async fn set_group_name(&self, group_id: i64, group_name: String) -> APIResult<()> {}
 
-	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> APIResult<()> {}
+	async fn set_group_leave(&self, group_id: i64, is_dismiss: Option<bool>) -> APIResult<()> {}
 
 	async fn set_group_special_title(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		special_title: Option<String>,
-		duration: Option<i32>,
+		duration: Option<i64>,
 	) -> APIResult<()> {
 	}
 
@@ -776,7 +776,7 @@ impl APISenderTrait for Client {
 
 	async fn get_stranger_info(
 		&self,
-		user_id: i32,
+		user_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetStrangerInfoResponse> {
 	}
@@ -785,7 +785,7 @@ impl APISenderTrait for Client {
 
 	async fn get_group_info(
 		&self,
-		group_id: i32,
+		group_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupInfoResponse> {
 	}
@@ -794,15 +794,15 @@ impl APISenderTrait for Client {
 
 	async fn get_group_member_info(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupMemberInfoResponse> {
 	}
 
 	async fn get_group_member_list(
 		&self,
-		group_id: i32,
+		group_id: i64,
 	) -> APIResult<Vec<GetGroupMemberInfoResponse>> {
 	}
 
@@ -818,7 +818,7 @@ impl APISenderTrait for Client {
 	async fn get_cookies(&self, domain: Option<String>) -> APIResult<String> {}
 
 	#[api(extract = "token", response = GetCsrfTokenResponse)]
-	async fn get_csrf_token(&self) -> APIResult<i32> {}
+	async fn get_csrf_token(&self) -> APIResult<i64> {}
 
 	async fn get_credentials(&self, domain: Option<String>) -> APIResult<GetCredentialsResponse> {}
 
@@ -838,7 +838,7 @@ impl APISenderTrait for Client {
 
 	async fn get_version_info(&self) -> APIResult<GetVersionInfoResponse> {}
 
-	async fn set_restart(&self, delay: Option<i32>) -> APIResult<()> {}
+	async fn set_restart(&self, delay: Option<i64>) -> APIResult<()> {}
 
 	async fn clean_cache(&self) -> APIResult<()> {}
 }

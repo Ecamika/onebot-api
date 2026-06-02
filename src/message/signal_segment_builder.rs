@@ -40,7 +40,7 @@ impl ImageDataBuilder {
 		self
 	}
 
-	pub fn timeout(mut self, timeout: i32) -> Self {
+	pub fn timeout(mut self, timeout: i64) -> Self {
 		self.data.timeout = Some(timeout);
 		self
 	}

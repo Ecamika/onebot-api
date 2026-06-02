@@ -28,7 +28,7 @@ pub trait APISender {
 	/// - `auto_escape` — 消息内容是否作为纯文本发送（不解析 CQ 码），仅在 `message` 为字符串时有效。
 	///
 	/// # 返回值
-	/// 返回发送成功的消息 ID（`i32`）。
+	/// 返回发送成功的消息 ID（`i64`）。
 	///
 	/// # 参考
 	/// - [`send_private_msg`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#send_private_msg-%E5%8F%91%E9%80%81%E7%A7%81%E8%81%8A%E6%B6%88%E6%81%AF)
@@ -37,7 +37,7 @@ pub trait APISender {
 		user_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32>;
+	) -> APIResult<i64>;
 
 	/// 发送群消息。
 	///
@@ -47,7 +47,7 @@ pub trait APISender {
 	/// - `auto_escape` — 消息内容是否作为纯文本发送（不解析 CQ 码），仅在 `message` 为字符串时有效。
 	///
 	/// # 返回值
-	/// 返回发送成功的消息 ID（`i32`）。
+	/// 返回发送成功的消息 ID（`i64`）。
 	///
 	/// # 参考
 	/// - [`send_group_msg`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#send_group_msg-%E5%8F%91%E9%80%81%E7%BE%A4%E6%B6%88%E6%81%AF)
@@ -56,7 +56,7 @@ pub trait APISender {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32>;
+	) -> APIResult<i64>;
 
 	/// 发送消息（自动判断私聊/群聊）。
 	///
@@ -68,7 +68,7 @@ pub trait APISender {
 	/// - `auto_escape` — 消息内容是否作为纯文本发送（不解析 CQ 码），仅在 `message` 为字符串时有效。
 	///
 	/// # 返回值
-	/// 返回发送成功的消息 ID（`i32`）。
+	/// 返回发送成功的消息 ID（`i64`）。
 	///
 	/// # 参考
 	/// - [`send_msg`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#send_msg-%E5%8F%91%E9%80%81%E6%B6%88%E6%81%AF)
@@ -79,7 +79,7 @@ pub trait APISender {
 		group_id: i64,
 		message: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32>;
+	) -> APIResult<i64>;
 
 	/// 撤回消息。
 	///
@@ -88,7 +88,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`delete_msg`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#delete_msg-%E6%92%A4%E5%9B%9E%E6%B6%88%E6%81%AF)
-	async fn delete_msg(&self, message_id: i32) -> APIResult<()>;
+	async fn delete_msg(&self, message_id: i64) -> APIResult<()>;
 
 	/// 获取消息详情。
 	///
@@ -100,7 +100,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`get_msg`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_msg-%E8%8E%B7%E5%8F%96%E6%B6%88%E6%81%AF)
-	async fn get_msg(&self, message_id: i32) -> APIResult<GetMsgResponse>;
+	async fn get_msg(&self, message_id: i64) -> APIResult<GetMsgResponse>;
 
 	/// 获取合并转发消息内容。
 	///
@@ -122,7 +122,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`send_like`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#send_like-%E5%8F%91%E9%80%81%E5%A5%BD%E5%8F%8B%E8%B5%9E)
-	async fn send_like(&self, user_id: i64, times: Option<i32>) -> APIResult<()>;
+	async fn send_like(&self, user_id: i64, times: Option<i64>) -> APIResult<()>;
 
 	/// 群组踢人。
 	///
@@ -135,8 +135,8 @@ pub trait APISender {
 	/// - [`set_group_kick`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_kick-%E7%BE%A4%E7%BB%84%E8%B8%A2%E4%BA%BA)
 	async fn set_group_kick(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		reject_add_request: Option<bool>,
 	) -> APIResult<()>;
 
@@ -151,9 +151,9 @@ pub trait APISender {
 	/// - [`set_group_ban`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_ban-%E7%BE%A4%E7%BB%84%E5%8D%95%E4%BA%BA%E7%A6%81%E8%A8%80)
 	async fn set_group_ban(
 		&self,
-		group_id: i32,
-		user_id: i32,
-		duration: Option<i32>,
+		group_id: i64,
+		user_id: i64,
+		duration: Option<i64>,
 	) -> APIResult<()>;
 
 	/// 群组匿名用户禁言。
@@ -171,10 +171,10 @@ pub trait APISender {
 	/// - [`set_group_anonymous_ban`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_anonymous_ban-%E7%BE%A4%E7%BB%84%E5%8C%BF%E5%90%8D%E7%94%A8%E6%88%B7%E7%A6%81%E8%A8%80)
 	async fn set_group_anonymous_ban(
 		&self,
-		group_id: i32,
+		group_id: i64,
 		anonymous: Option<GroupMessageAnonymous>,
 		flag: Option<String>,
-		duration: Option<i32>,
+		duration: Option<i64>,
 	) -> APIResult<()>;
 
 	/// 群组全员禁言。
@@ -185,7 +185,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`set_group_whole_ban`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_whole_ban-%E7%BE%A4%E7%BB%84%E5%85%A8%E5%91%98%E7%A6%81%E8%A8%80)
-	async fn set_group_whole_ban(&self, group_id: i32, enable: Option<bool>) -> APIResult<()>;
+	async fn set_group_whole_ban(&self, group_id: i64, enable: Option<bool>) -> APIResult<()>;
 
 	/// 群组设置管理员。
 	///
@@ -198,8 +198,8 @@ pub trait APISender {
 	/// - [`set_group_admin`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_admin-%E7%BE%A4%E7%BB%84%E8%AE%BE%E7%BD%AE%E7%AE%A1%E7%90%86%E5%91%98)
 	async fn set_group_admin(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		enable: Option<bool>,
 	) -> APIResult<()>;
 
@@ -211,7 +211,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`set_group_anonymous`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_anonymous-%E7%BE%A4%E7%BB%84%E5%8C%BF%E5%90%8D)
-	async fn set_group_anonymous(&self, group_id: i32, enable: Option<bool>) -> APIResult<()>;
+	async fn set_group_anonymous(&self, group_id: i64, enable: Option<bool>) -> APIResult<()>;
 
 	/// 设置群名片（群备注）。
 	///
@@ -224,8 +224,8 @@ pub trait APISender {
 	/// - [`set_group_card`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_card-%E8%AE%BE%E7%BD%AE%E7%BE%A4%E5%90%8D%E7%89%87%E7%BE%A4%E5%A4%87%E6%B3%A8)
 	async fn set_group_card(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		card: Option<String>,
 	) -> APIResult<()>;
 
@@ -237,7 +237,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`set_group_name`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_name-%E8%AE%BE%E7%BD%AE%E7%BE%A4%E5%90%8D)
-	async fn set_group_name(&self, group_id: i32, group_name: String) -> APIResult<()>;
+	async fn set_group_name(&self, group_id: i64, group_name: String) -> APIResult<()>;
 
 	/// 退出群组。
 	///
@@ -247,7 +247,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`set_group_leave`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_leave-%E9%80%80%E5%87%BA%E7%BE%A4%E7%BB%84)
-	async fn set_group_leave(&self, group_id: i32, is_dismiss: Option<bool>) -> APIResult<()>;
+	async fn set_group_leave(&self, group_id: i64, is_dismiss: Option<bool>) -> APIResult<()>;
 
 	/// 设置群组专属头衔。
 	///
@@ -261,10 +261,10 @@ pub trait APISender {
 	/// - [`set_group_special_title`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_group_special_title-%E8%AE%BE%E7%BD%AE%E7%BE%A4%E7%BB%84%E4%B8%93%E5%B1%9E%E5%A4%B4%E8%A1%94)
 	async fn set_group_special_title(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		special_title: Option<String>,
-		duration: Option<i32>,
+		duration: Option<i64>,
 	) -> APIResult<()>;
 
 	/// 处理加好友请求。
@@ -323,7 +323,7 @@ pub trait APISender {
 	/// - [`get_stranger_info`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_stranger_info-%E8%8E%B7%E5%8F%96%E9%99%8C%E7%94%9F%E4%BA%BA%E4%BF%A1%E6%81%AF)
 	async fn get_stranger_info(
 		&self,
-		user_id: i32,
+		user_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetStrangerInfoResponse>;
 
@@ -349,7 +349,7 @@ pub trait APISender {
 	/// - [`get_group_info`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_group_info-%E8%8E%B7%E5%8F%96%E7%BE%A4%E4%BF%A1%E6%81%AF)
 	async fn get_group_info(
 		&self,
-		group_id: i32,
+		group_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupInfoResponse>;
 
@@ -376,8 +376,8 @@ pub trait APISender {
 	/// - [`get_group_member_info`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_group_member_info-%E8%8E%B7%E5%8F%96%E7%BE%A4%E6%88%90%E5%91%98%E4%BF%A1%E6%81%AF)
 	async fn get_group_member_info(
 		&self,
-		group_id: i32,
-		user_id: i32,
+		group_id: i64,
+		user_id: i64,
 		no_cache: Option<bool>,
 	) -> APIResult<GetGroupMemberInfoResponse>;
 
@@ -394,7 +394,7 @@ pub trait APISender {
 	/// - [`get_group_member_list`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_group_member_list-%E8%8E%B7%E5%8F%96%E7%BE%A4%E6%88%90%E5%91%98%E5%88%97%E8%A1%A8)
 	async fn get_group_member_list(
 		&self,
-		group_id: i32,
+		group_id: i64,
 	) -> APIResult<Vec<GetGroupMemberInfoResponse>>;
 
 	/// 获取群荣誉信息。
@@ -430,11 +430,11 @@ pub trait APISender {
 	/// 获取 CSRF Token。
 	///
 	/// # 返回值
-	/// 返回 CSRF Token（`i32`）。
+	/// 返回 CSRF Token（`i64`）。
 	///
 	/// # 参考
 	/// - [`get_csrf_token`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#get_csrf_token-%E8%8E%B7%E5%8F%96-csrf-token)
-	async fn get_csrf_token(&self) -> APIResult<i32>;
+	async fn get_csrf_token(&self) -> APIResult<i64>;
 
 	/// 获取 QQ 相关接口凭证（Cookies + CSRF Token）。
 	///
@@ -520,7 +520,7 @@ pub trait APISender {
 	///
 	/// # 参考
 	/// - [`set_restart`](https://github.com/botuniverse/onebot-11/blob/master/api/public.md#set_restart-%E9%87%8D%E5%90%AF-onebot-%E5%AE%9E%E7%8E%B0)
-	async fn set_restart(&self, delay: Option<i32>) -> APIResult<()>;
+	async fn set_restart(&self, delay: Option<i64>) -> APIResult<()>;
 
 	/// 清理缓存。
 	///

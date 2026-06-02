@@ -131,7 +131,7 @@ pub struct ImageData {
 	pub proxy: Option<bool>,
 	/// # 说明
 	/// 只在通过网络 URL 发送时有效，单位秒，表示下载网络文件的超时时间，默认不超时
-	pub timeout: Option<i32>,
+	pub timeout: Option<i64>,
 }
 
 impl SendSegmentData for ImageData {
@@ -164,7 +164,7 @@ pub struct RecordData {
 	pub proxy: Option<bool>,
 	/// # 说明
 	/// 只在通过网络 URL 发送时有效，单位秒，表示下载网络文件的超时时间，默认不超时
-	pub timeout: Option<i32>,
+	pub timeout: Option<i64>,
 }
 
 impl SendSegmentData for RecordData {
@@ -192,7 +192,7 @@ pub struct VideoData {
 	pub proxy: Option<bool>,
 	/// # 说明
 	/// 只在通过网络 URL 发送时有效，单位秒，表示下载网络文件的超时时间，默认不超时
-	pub timeout: Option<i32>,
+	pub timeout: Option<i64>,
 }
 
 impl SendSegmentData for VideoData {

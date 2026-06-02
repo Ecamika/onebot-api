@@ -7,7 +7,7 @@ type ApiResult<T> = Result<T, anyhow::Error>;
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct SendMsgResponse {
-	pub message_id: i32,
+	pub message_id: i64,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -17,7 +17,7 @@ pub struct GetCookiesResponse {
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct GetLoginInfoResponse {
-	pub user_id: i32,
+	pub user_id: i64,
 	pub nickname: String,
 }
 
@@ -28,9 +28,9 @@ pub trait TestApi {
 		user_id: i64,
 		message: String,
 		auto_escape: Option<bool>,
-	) -> ApiResult<i32>;
+	) -> ApiResult<i64>;
 
-	async fn delete_msg(&self, message_id: i32) -> ApiResult<()>;
+	async fn delete_msg(&self, message_id: i64) -> ApiResult<()>;
 
 	async fn get_login_info(&self) -> ApiResult<GetLoginInfoResponse>;
 
@@ -96,10 +96,10 @@ impl TestApi for TestClient {
 		user_id: i64,
 		message: String,
 		auto_escape: Option<bool>,
-	) -> ApiResult<i32> {
+	) -> ApiResult<i64> {
 	}
 
-	async fn delete_msg(&self, message_id: i32) -> ApiResult<()> {}
+	async fn delete_msg(&self, message_id: i64) -> ApiResult<()> {}
 
 	async fn get_login_info(&self) -> ApiResult<GetLoginInfoResponse> {}
 

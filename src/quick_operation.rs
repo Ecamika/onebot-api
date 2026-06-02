@@ -10,7 +10,7 @@ pub trait QuickSendMsg<T: APISender + Sync + Send> {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32>;
+	) -> APIResult<i64>;
 }
 
 #[async_trait]
@@ -20,7 +20,7 @@ pub trait QuickReplyAt<T: APISender + Sync + Send> {
 		api: &T,
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
-	) -> APIResult<i32>;
+	) -> APIResult<i64>;
 }
 
 #[async_trait]
@@ -35,7 +35,7 @@ pub trait QuickKick<T: APISender + Sync + Send> {
 
 #[async_trait]
 pub trait QuickBan<T: APISender + Sync + Send> {
-	async fn ban(&self, api: &T, duration: Option<i32>) -> APIResult<()>;
+	async fn ban(&self, api: &T, duration: Option<i64>) -> APIResult<()>;
 }
 
 #[async_trait]

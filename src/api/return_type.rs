@@ -12,11 +12,11 @@ use std::collections::HashMap;
 #[derive(Deserialize)]
 pub struct GetMsgResponse {
 	/// 发送时间戳。
-	pub time: i32,
+	pub time: i64,
 	/// 消息 ID。
-	pub message_id: i32,
+	pub message_id: i64,
 	/// 消息真实 ID。
-	pub real_id: i32,
+	pub real_id: i64,
 	/// 发送人信息。
 	pub sender: Sender,
 	/// 消息内容。
@@ -47,7 +47,7 @@ pub enum Sender {
 #[derive(Deserialize)]
 pub struct GetLoginInfoResponse {
 	/// QQ 号。
-	pub user_id: i32,
+	pub user_id: i64,
 	/// QQ 昵称。
 	pub nickname: String,
 }
@@ -63,20 +63,20 @@ pub struct GetForwardMsgResponse {
 #[derive(Deserialize)]
 pub struct GetStrangerInfoResponse {
 	/// QQ 号。
-	pub user_id: i32,
+	pub user_id: i64,
 	/// 昵称。
 	pub nickname: String,
 	/// 性别。
 	pub sex: Sex,
 	/// 年龄。
-	pub age: i32,
+	pub age: i64,
 }
 
 /// [`get_friend_list`](super::APISender::get_friend_list) 的响应数组元素。
 #[derive(Deserialize)]
 pub struct GetFriendListResponse {
 	/// QQ 号。
-	pub user_id: i32,
+	pub user_id: i64,
 	/// 昵称。
 	pub nickname: String,
 	/// 备注名。
@@ -103,9 +103,9 @@ pub struct GetGroupInfoResponse {
 #[derive(Deserialize)]
 pub struct GetGroupMemberInfoResponse {
 	/// 群号。
-	pub group_id: i32,
+	pub group_id: i64,
 	/// QQ 号。
-	pub user_id: i32,
+	pub user_id: i64,
 	/// 昵称。
 	pub nickname: String,
 	/// 群名片／备注。
@@ -113,13 +113,13 @@ pub struct GetGroupMemberInfoResponse {
 	/// 性别。
 	pub sex: Sex,
 	/// 年龄。
-	pub age: i32,
+	pub age: i64,
 	/// 地区。
 	pub area: String,
 	/// 加群时间戳。
-	pub join_time: i32,
+	pub join_time: i64,
 	/// 最后发言时间戳。
-	pub last_sent_time: i32,
+	pub last_sent_time: i64,
 	/// 成员等级。
 	pub level: String,
 	/// 角色（`owner`、`admin` 或 `member`）。
@@ -129,7 +129,7 @@ pub struct GetGroupMemberInfoResponse {
 	/// 专属头衔。
 	pub title: String,
 	/// 专属头衔过期时间戳。
-	pub title_expire_time: i32,
+	pub title_expire_time: i64,
 	/// 是否允许修改群名片。
 	pub card_changeable: bool,
 }
@@ -138,7 +138,7 @@ pub struct GetGroupMemberInfoResponse {
 #[derive(Deserialize, Debug, Clone, Copy)]
 pub struct SendMsgResponse {
 	/// 消息 ID。
-	pub message_id: i32,
+	pub message_id: i64,
 }
 
 /// [`can_send_image`](super::APISender::can_send_image) 与 [`can_send_record`](super::APISender::can_send_record) 的响应数据。
@@ -177,7 +177,7 @@ pub struct CurrentTalkative {
 	/// 头像 URL。
 	pub avatar: String,
 	/// 持续天数。
-	pub day_count: i32,
+	pub day_count: i64,
 }
 
 /// 群荣誉信息 — 历史荣誉列表元素。
@@ -204,7 +204,7 @@ pub struct GetCookiesResponse {
 #[derive(Deserialize, Debug, Clone)]
 pub struct GetCsrfTokenResponse {
 	/// CSRF Token。
-	pub token: i32,
+	pub token: i64,
 }
 
 /// [`get_credentials`](super::APISender::get_credentials) 的响应数据。
@@ -215,7 +215,7 @@ pub struct GetCredentialsResponse {
 	/// Cookies。
 	pub cookies: String,
 	/// CSRF Token。
-	pub csrf_token: i32,
+	pub csrf_token: i64,
 }
 
 /// [`get_record`](super::APISender::get_record) 与 [`get_image`](super::APISender::get_image) 的响应数据。
