@@ -26,6 +26,11 @@ cargo check --no-default-features --features "websocket,http"
 - `rustfmt.toml` 配置使用 **硬制表符**，`tab_spaces = 2`，`edition = "2024"`。
 - 提交前运行 `cargo fmt`。CI 不强制检查格式，但项目内部约定严格遵循。
 
+## Git 提交规则
+- git 提交信息必须使用中文。
+- git 提交前必须读取本次改动涉及的 `changelogs/` 记录，并与 git 中已修改的文件逐项对比。
+- 若发现某些文件存在 git 修改，但对应变更未在 `changelogs/` 中提及，必须先将这些遗漏同步追加到当天的 changelog 后再提交。
+
 ## 架构
 - `Client`（位于 `src/communication/utils.rs`）是唯一入口。它使用：
   - `flume`（mpsc）作为 API 请求通道（`InternalAPISender` / `InternalAPIReceiver`）
