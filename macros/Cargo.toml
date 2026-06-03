@@ -1,6 +1,6 @@
 [package]
 name = "onebot-api-macros"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Proc macros for onebot-api"
 license = "MIT"
@@ -19,4 +19,4 @@ anyhow = "1.0.102"
 async-trait = "0.1.89"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-tokio = { version = "1.52.1", features = ["full"] }
+tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread"] }

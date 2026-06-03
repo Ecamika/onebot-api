@@ -1,23 +1,22 @@
 [package]
 name = "onebot-api"
-version = "1.2.4"
+version = "1.2.5"
 edition = "2024"
-authors = ["Ecamika <ecamika@outlook.com>"]
-description = "Onebot API"
+authors = ["Ecamika <index@ecamika.dev>"]
+description = "An Unofficial SDK for OneBot V11 Protocol"
 repository = "https://github.com/Ecamika/onebot-api.git"
 homepage = "https://github.com/Ecamika/onebot-api"
 license = "MIT"
-license-file = "LICENSE"
 
 [dependencies]
-onebot-api-macros = { version = "0.1.1", path = "macros" }
+onebot-api-macros = { version = "0.1.2", path = "macros" }
 
 #async-stream = "0.3.6"
 async-trait = "0.1.89"
 futures = "0.3.32"
 reqwest = { version = "0.13.2", features = ["json"], optional = true }
 axum = { version = "0.8.8", features = ["ws"], optional = true }
-tokio = { version = "1.50.0", features = ["full"] }
+tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 tokio-tungstenite = { version = "0.29.0", optional = true }
 url = "2.5.8"
 http = "1.4.0"
