@@ -43,9 +43,14 @@ async function runScript(command: string, args: string[], cwd?: string) {
   })
 
   const child = cmd.spawn()
-  child.stdout.pipeTo(Deno.stdout.writable)
-  child.stderr.pipeTo(Deno.stderr.writable)
+  const stdoutTask = child.stdout
+    .pipeTo(Deno.stdout.writable, { preventClose: true })
+    .catch(() => undefined)
+  const stderrTask = child.stderr
+    .pipeTo(Deno.stderr.writable, { preventClose: true })
+    .catch(() => undefined)
   const status = await child.status
+  await Promise.all([stdoutTask, stderrTask])
   if (!status.success) {
     Deno.exit(status.code)
   }
@@ -84,6 +89,30 @@ async function waitForCrateIndex(name: string, version: string, maxWaitMs = 3000
   throw new Error(`timeout waiting for ${name}@${version} to be available on crates.io`)
 }
 
+async function ensureRelease(octokit: Octokit, owner: string, repo: string, tag: string) {
+  try {
+    await octokit.repos.getReleaseByTag({
+      owner,
+      repo,
+      tag,
+    })
+    console.log(`release ${tag} already exists, skipping.`)
+    return
+  } catch (error) {
+    if (error instanceof Error && "status" in error && error.status !== 404) {
+      throw error
+    }
+  }
+
+  await octokit.repos.createRelease({
+    repo,
+    owner,
+    tag_name: tag,
+    name: tag,
+    generate_release_notes: true
+  })
+}
+
 async function main() {
   const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")
   const GITHUB_REPOSITORY = Deno.env.get("GITHUB_REPOSITORY")
@@ -109,14 +138,15 @@ async function main() {
   const mainName = mainManifest.package.name
   const mainVersion = mainManifest.package.version
 
-  if (await checkCrateVersionExists(mainName, mainVersion)) {
-    console.log(`${mainName}@${mainVersion} already exists on crates.io, skipping.`)
-    return
-  }
-
   const macrosManifest = await readManifest(baseDir, "macros/Cargo.toml")
   const macrosName = macrosManifest.package.name
   const macrosVersion = macrosManifest.package.version
+
+  const mainExists = await checkCrateVersionExists(mainName, mainVersion)
+
+  if (mainExists) {
+    console.log(`${mainName}@${mainVersion} already exists on crates.io, skipping publish.`)
+  }
 
   if (!await checkCrateVersionExists(macrosName, macrosVersion)) {
     console.log(`publishing ${macrosName}@${macrosVersion}...`)
@@ -129,17 +159,11 @@ async function main() {
 
   const tag = `v${mainVersion}`
 
-  await octokit.repos.createRelease({
-    repo: REPO_NAME,
-    owner: OWNER,
-    tag_name: tag,
-    name: tag,
-    generate_release_notes: true
-  })
+  if (!mainExists) {
+    await runScript("cargo", ["publish", "--token", CARGO_PUBLISH], baseDir)
+  }
 
-  // const CARGO_PATH = `${Deno.env.get("HOME")}/.cargo/bin/cargo`
-
-  await runScript("cargo", ["publish", "--token", CARGO_PUBLISH], baseDir)
+  await ensureRelease(octokit, OWNER, REPO_NAME, tag)
 
 }
 
