@@ -1,38 +1,41 @@
 # onebot-api TODO List
 
-> 基于当前仓库实现、文档状态和测试结果整理。优先级越高，越建议越早处理。
+> 基于当前仓库实现、文档状态和 `cargo test` / `cargo test --doc` 结果整理。优先级越高，越建议越早处理。
 
 ## P0 立即处理
 
 - [✅] 修复 `ws_reverse` 的连接状态回收问题
-  目前连接建立后会将 `connected` 置为 `true`，但连接结束后没有稳定地回收为 `false`，可能导致首个连接断开后后续重连一直被拒绝。
+  已通过 `ConnectionGuard` 和回归测试覆盖连接断开、非法消息、API 通道关闭后的状态回收，避免首个连接断开后后续重连一直被拒绝。
 
-- [ ] 统一各 `CommunicationService` 的运行状态与退出语义
-  `http`、`sse`、`ws_reverse` 当前在任务异常退出后可能仍保持 `is_running = true`，并且后台任务错误会被静默吞掉，影响重启、排障和调用方判断。
+- [✅] 统一各 `CommunicationService` 的运行状态与退出语义
+  `http`、`http_post`、`sse`、`ws`、`ws_reverse`、`combiner` 已统一接入 `ServiceTaskState` / `ServiceTaskGuard`，并通过 `take_runtime_error()` 暴露后台任务错误。
 
-- [ ] 清理协议服务中的 panic 路径
-  对外暴露的 HTTP Post / Reverse WebSocket 入口里存在 `unwrap()`，面对非法 Header、非法 JSON、异常连接时不应 panic，而应返回明确的状态码或结构化错误。
+- [✅] 清理协议服务中的 panic 路径
+  HTTP Post / Reverse WebSocket 对外入口面对非法 Header、非法 JSON、异常连接时已改为返回明确状态码，并有集成测试覆盖不 panic 的行为。
 
-- [ ] 修复已经失效的 doctest 与内联示例
-  当前 `cargo test` 下 doctest 已失败，说明示例代码和真实 API 已经漂移。需要同步修正 `src/communication/utils.rs`、`src/communication/combiner.rs` 以及 README 中的示例。
+- [ ] 同步 README 示例与当前 API/实现语义
+  当前 `cargo test --doc` 已通过，但 README 仍有多处描述和示例与现状漂移，例如：
+  - `Client` 事件分发仍被描述为直接使用 `tokio::broadcast`，而实现里公开事件通道实际是 `flume`
+  - 多个 README 示例把 `client` 声明为不可变变量，却调用了需要 `&mut self` 的 `start_service()`
+  - 文档仍偏向旧的构造 API 写法，没有把 `Client::builder(...)` 作为首选入口
 
 ## P1 短期内完成
 
 - [ ] 补齐主 crate 的测试体系
-  目前主 crate 几乎没有覆盖核心通信层的测试，建议优先补：
+  当前已具备 `http_post`、`ws_reverse` 集成测试和部分消息段 / 事件单元测试，但核心通信层仍有明显空白，建议优先补：
   - `Client` 的 echo 路由与超时行为
   - `raw_event_processor` 的事件/响应分流逻辑
-  - `ws` / `ws_reverse` / `http` / `sse` 的启动、停止、重启行为
+  - `ws` / `http` / `sse` / `combiner` 的启动、停止、重启行为
   - 断线重连与通道关闭后的边界场景
 
 - [ ] 统一公共 API 中的 ID 类型
   当前 `user_id` / `group_id` / 部分响应模型在 `i32` 与 `i64` 间混用，建议统一策略，尽量收敛到与协议数据更一致的类型，避免调用方频繁转换。
 
 - [ ] 统一文档与实现对事件分发模型的描述
-  README 目前将 `Client` 描述为直接使用 `tokio::broadcast` 分发事件，但实现中公开事件通道实际仍是 `flume`，`broadcast` 由装饰器提供，需要校正文档表述。
+  README 目前将 `Client` 描述为直接使用 `tokio::broadcast` 分发事件，但实现中公开事件通道实际仍是 `flume`，`broadcast` 由 `EventBroadcastDecorator` 提供，需要校正文档表述。
 
 - [ ] 为服务错误补充更可诊断的错误信息
-  当前不少地方使用 `Unknown` 或直接忽略错误，建议将监听失败、握手失败、反序列化失败、连接关闭原因等细分并透出，方便库使用者定位问题。
+  当前基础运行时错误已经能通过 `take_runtime_error()` 取回，但错误种类和上下文仍偏粗，建议继续细分监听失败、握手失败、反序列化失败、连接关闭原因等信息，方便库使用者定位问题。
 
 ## P2 中期优化
 
@@ -84,6 +87,6 @@
 
 ## 推荐执行顺序
 
-1. 先修复 P0 的生命周期、panic、doctest 问题，保证项目“能稳定跑、文档能信”。
+1. 先处理 P0 的 README 漂移问题，保证项目“文档能信、示例能抄”。
 2. 然后完成 P1 的测试补强和公共 API 一致性整理，降低后续改动成本。
 3. 最后推进 P2/P3 的可维护性、生态扩展和发布质量建设。
