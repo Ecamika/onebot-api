@@ -481,7 +481,62 @@ async fn main() {
 - 异步版本（后缀 `async`）
 - 链式调用异步版本（前缀 `and` + 后缀 `async`）
 
-当然，最后的 `select_async` 也有对应的异步版本
+当然，最后的 `select_async` 也有对应的异步版本  
+
+随着 `Selector` 的发展，我们便可以使用非常优美的方式书写代码  
+以下是实现一个简单的 `/戳` 指令的示例
+```rust
+use onebot_api::communication::utils::Client;
+use onebot_api::communication::ws::WsService;
+use onebot_api::extension::napcat::api::NapCatAPISender;
+use onebot_api::selector::AsSelector;
+use url::Url;
+
+#[tokio::main]
+async fn main() {
+	let s = WsService::new(Url::parse("wss://example.com").unwrap(), None);
+	let mut client = Client::new(s);
+	client.start_service().await.unwrap();
+	let receiver = client.get_normal_event_receiver();
+	while let Ok(event) = receiver.recv_async().await {
+		event
+			.selector()
+			.known()
+			.message()
+			.message_event_selector()
+			.group()
+			.and_filter_message(|e| {
+				e.as_slice()
+					.as_selector()
+					.indexof(0)
+					.text()
+					.and_filter(|text| text.text.starts_with("/戳"))
+					.is_matched()
+			})
+			.and_filter_message(|e| {
+				e.as_slice()
+					.as_selector()
+					.indexof(1)
+					.at()
+					.and_filter(|at| at.qq.is_id())
+					.is_matched()
+			})
+			.map_async(async |e| {
+				let user_id: i64 = e
+					.message
+					.as_slice()
+					.as_selector()
+					.indexof(1)
+					.at()
+					.map(|at| at.qq.match_id().map(|qq| qq.parse().unwrap()))
+					.flatten()
+					.unwrap();
+				client.group_poke(e.group_id, user_id).await.unwrap();
+			})
+			.await;
+	}
+}
+```
 
 ## `EventBroadcastDecorator`
 

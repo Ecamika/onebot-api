@@ -154,7 +154,9 @@ impl APIResponse {
 		if !self.verify() {
 			return Err(APIRequestError::HttpError { code: self.retcode });
 		}
-		Ok(serde_json::from_value(self.data.clone().unwrap_or(JsonValue::Null))?)
+		Ok(serde_json::from_value(
+			self.data.clone().unwrap_or(JsonValue::Null),
+		)?)
 	}
 }
 

@@ -44,6 +44,7 @@ quick_operation = []
 selector = []
 
 napcat = []
+go-cqhttp = []
 
 rustls = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpki-roots"]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
@@ -59,6 +60,7 @@ full = [
 	"quick_operation",
 	"selector",
 	"napcat",
+	"go-cqhttp",
 ]
 
 default = ["full"]

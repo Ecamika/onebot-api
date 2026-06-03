@@ -249,10 +249,9 @@ pub enum KnownEvent {
 #[serde(untagged)]
 pub enum Event {
 	Known(KnownEvent),
-	Unknown(JsonValue)
+	Unknown(JsonValue),
 }
 
 pub trait EventTrait {}
 
 impl EventTrait for Event {}
-

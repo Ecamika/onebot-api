@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
+use strum::EnumIs;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, EnumIs)]
 pub enum ImageType {
 	#[serde(rename = "flash")]
 	Flash,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[cfg_attr(feature = "selector", derive(onebot_api_macros::Selector))]
+#[derive(Deserialize, Serialize, Debug, Clone, EnumIs)]
 #[serde(untagged)]
 pub enum AtType {
 	#[serde(rename = "all")]
@@ -14,7 +16,7 @@ pub enum AtType {
 	Id(String),
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, EnumIs)]
 pub enum ContactType {
 	#[serde(rename = "qq")]
 	QQ,
@@ -22,7 +24,7 @@ pub enum ContactType {
 	Group,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, EnumIs)]
 pub enum MusicType {
 	#[serde(rename = "qq")]
 	QQ,

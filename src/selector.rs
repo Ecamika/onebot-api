@@ -1,3 +1,7 @@
+pub trait AsSelector<'a, T> {
+	fn as_selector(&'a self) -> Selector<'a, T>;
+}
+
 pub struct Selector<'a, T> {
 	pub(crate) data: Option<&'a T>,
 }
