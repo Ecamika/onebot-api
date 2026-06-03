@@ -14,9 +14,11 @@ use syn::{
 
 #[derive(Default)]
 struct ApiAction {
+	action: Option<String>,
 	extract: Option<String>,
 	response_type: Option<Type>,
 	renames: Vec<(String, String)>,
+	discard: bool,
 }
 
 fn take_api_attr(attrs: &mut Vec<Attribute>) -> Option<Attribute> {
@@ -44,6 +46,16 @@ fn parse_type_meta(nv: &syn::MetaNameValue) -> Option<Type> {
 	}))
 }
 
+fn parse_bool_meta(nv: &syn::MetaNameValue) -> Option<bool> {
+	let Expr::Lit(lit) = &nv.value else {
+		return None;
+	};
+	let syn::Lit::Bool(b) = &lit.lit else {
+		return None;
+	};
+	Some(b.value)
+}
+
 fn parse_map_list(list: &syn::MetaList) -> Vec<(String, String)> {
 	let Ok(inner) = list
 		.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
@@ -68,11 +80,17 @@ fn parse_map_list(list: &syn::MetaList) -> Vec<(String, String)> {
 
 fn parse_api_meta(meta: Meta, action: &mut ApiAction) {
 	match meta {
+		Meta::NameValue(nv) if nv.path.is_ident("action") => {
+			action.action = parse_string_meta(&nv);
+		}
 		Meta::NameValue(nv) if nv.path.is_ident("extract") => {
 			action.extract = parse_string_meta(&nv);
 		}
 		Meta::NameValue(nv) if nv.path.is_ident("response") => {
 			action.response_type = parse_type_meta(&nv);
+		}
+		Meta::NameValue(nv) if nv.path.is_ident("discard") => {
+			action.discard = parse_bool_meta(&nv).unwrap_or(false);
 		}
 		Meta::List(list) if list.path.is_ident("map") => {
 			action.renames = parse_map_list(&list);
@@ -108,7 +126,10 @@ fn take_api_action(attrs: &mut Vec<Attribute>) -> ApiAction {
 }
 
 fn generate_method_body(method: &ImplItemFn, action: &ApiAction) -> proc_macro2::TokenStream {
-	let action_name = method.sig.ident.to_string();
+	let action_name = action
+		.action
+		.clone()
+		.unwrap_or_else(|| method.sig.ident.to_string());
 	let action_lit = syn::LitStr::new(&action_name, proc_macro2::Span::call_site());
 
 	let json_entries: Vec<proc_macro2::TokenStream> = method
@@ -138,7 +159,15 @@ fn generate_method_body(method: &ImplItemFn, action: &ApiAction) -> proc_macro2:
 		})
 		.collect();
 
-	if let Some(ref extract_field) = action.extract {
+	if action.discard {
+		quote!({
+			let params = ::serde_json::json!({
+				#(#json_entries)*
+			});
+			let _: ::serde_json::Value = self.send_and_parse(#action_lit, params).await?;
+			Ok(())
+		})
+	} else if let Some(ref extract_field) = action.extract {
 		let response_type = action
 			.response_type
 			.as_ref()

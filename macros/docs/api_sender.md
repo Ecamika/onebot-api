@@ -12,8 +12,10 @@
 
 - 自动将方法参数转换为 JSON 请求体
 - 自动调用 `send_and_parse()` 发送请求并解析响应
+- 支持覆盖默认的 action 名称
 - 支持从响应中提取特定字段
 - 支持参数名到 JSON 键名的映射
+- 支持忽略响应体，仅校验请求成功与否
 
 ---
 
@@ -114,6 +116,17 @@ Ok(response.message_id)
 
 > **注意**：使用 `extract` 时必须同时指定 `response`，因为需要先反序列化为中间类型才能提取字段。
 
+### `action = "name"` — 覆盖默认 action 名
+
+默认情况下，方法名会直接作为 API action 名发送。若真实 action 与 Rust 方法名不一致，可以显式覆盖：
+
+```rust
+#[api(action = "ArkSharePeer")]
+pub async fn ark_share_peer(&self, user_id: i64) -> Result<serde_json::Value, Error>;
+```
+
+生成的调用会使用 `"ArkSharePeer"`，而不是 `"ark_share_peer"`。
+
 ### `map(...)` — 参数名映射
 
 OneBot API 的 JSON 键名可能与 Rust 参数命名风格不同（如蛇形命名 vs API 命名）。使用 `map` 可以将参数映射到不同的 JSON 键名：
@@ -142,6 +155,17 @@ pub async fn send_group_msg(&self, group_id: i64, message: String) -> Result<ser
 )]
 pub async fn send_private_msg(&self, user_id: i64, message: String) -> Result<i64, Error>;
 ```
+
+### `discard = true` — 忽略响应体
+
+当接口只关心请求是否成功，不关心返回的 `data` 内容时，可以使用：
+
+```rust
+#[api(discard = true)]
+pub async fn set_group_sign(&self, group_id: i64) -> Result<(), APIError>;
+```
+
+生成的代码会先发送请求并解析为 `serde_json::Value` 校验成功，再返回 `Ok(())`。
 
 ---
 
@@ -205,9 +229,10 @@ impl APIClient {
 1. `#[api_sender]` 解析 `impl` 块中的所有方法
 2. 检查每个方法是否有 `#[api(...)]` 属性
 3. 对于有 `#[api]` 的方法：
-   - 使用方法名作为 API action 名称
+   - 默认使用方法名作为 API action 名称，必要时由 `action = "..."` 覆盖
    - 扫描方法参数，生成 `serde_json::json!` 构造
    - 应用 `map` 重命名规则
+   - 如果有 `discard = true`，发送请求后忽略响应体，仅保留成功/失败语义
    - 如果有 `extract`，先反序列化为 `response` 类型，再提取字段
    - 替换原方法体为生成的代码
 4. 没有 `#[api]` 的方法原样保留
@@ -223,4 +248,5 @@ impl APIClient {
 - `#[api]` 属性只能用于异步方法（`async fn`）
 - 第一个参数必须是 `&self`（目前不支持 `&mut self`）
 - `extract` 和 `response` 必须成对使用
+- `discard = true` 时会忽略返回 `data` 的结构，仅校验请求成功
 - `map` 中的条目用逗号分隔，格式为 `param_name = "json_key"`

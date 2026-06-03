@@ -1,10 +1,10 @@
-#[cfg(feature = "selector")]
-use onebot_api_macros::Selector;
 #[cfg(feature = "quick_operation")]
 use crate::api::APISender;
 #[cfg(feature = "quick_operation")]
 use crate::quick_operation::{QuickHandleFriendRequest, QuickHandleGroupRequest};
 use async_trait::async_trait;
+#[cfg(feature = "selector")]
+use onebot_api_macros::Selector;
 use serde::Deserialize;
 use strum::{Display, EnumIs};
 

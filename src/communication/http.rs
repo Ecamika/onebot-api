@@ -106,7 +106,7 @@ impl HttpService {
 		if !status.is_success() {
 			let res = APIResponse {
 				echo,
-				data: JsonValue::Null,
+				data: Some(JsonValue::Null),
 				retcode: status.as_u16() as i32,
 				status: "failed".to_string(),
 			};
@@ -115,7 +115,7 @@ impl HttpService {
 			let http_res: HttpResponse = response.json().await?;
 			let res = APIResponse {
 				echo,
-				data: http_res.data,
+				data: Some(http_res.data),
 				status: http_res.status,
 				retcode: http_res.retcode,
 			};

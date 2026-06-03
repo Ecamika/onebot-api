@@ -43,6 +43,8 @@ combiner = []
 quick_operation = []
 selector = []
 
+napcat = []
+
 rustls = ["reqwest/rustls", "tokio-tungstenite/rustls-tls-webpki-roots"]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
 
@@ -56,6 +58,7 @@ full = [
 	"rustls",
 	"quick_operation",
 	"selector",
+	"napcat",
 ]
 
 default = ["full"]

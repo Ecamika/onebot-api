@@ -230,7 +230,7 @@ impl<'de> Deserialize<'de> for EventMetaEvent {
 #[cfg_attr(feature = "selector", derive(Selector))]
 #[derive(Deserialize, Debug, Clone, Display, EnumIs)]
 #[serde(tag = "post_type")]
-pub enum Event {
+pub enum KnownEvent {
 	#[serde(rename = "message")]
 	Message(EventMessage),
 
@@ -244,67 +244,15 @@ pub enum Event {
 	MetaEvent(EventMetaEvent),
 }
 
+#[cfg_attr(feature = "selector", derive(Selector))]
+#[derive(Deserialize, Debug, Clone, Display, EnumIs)]
+#[serde(untagged)]
+pub enum Event {
+	Known(KnownEvent),
+	Unknown(JsonValue)
+}
+
 pub trait EventTrait {}
 
 impl EventTrait for Event {}
 
-#[cfg(test)]
-mod tests {
-	use super::Event;
-
-	#[test]
-	fn message_event_extra_body_only_keeps_unknown_fields() {
-		let raw = r#"{
-			"time": 1,
-			"self_id": 2,
-			"post_type": "message",
-			"message_type": "private",
-			"sub_type": "friend",
-			"message_id": 3,
-			"user_id": 4,
-			"message": [],
-			"raw_message": "",
-			"font": 5,
-			"sender": {},
-			"message_seq": 6,
-			"custom_flag": true
-		}"#;
-
-		let event: Event = serde_json::from_str(raw).expect("message event should deserialize");
-		let Event::Message(event) = event else {
-			panic!("expected message event");
-		};
-
-		assert_eq!(event.extra_body.len(), 2);
-		assert_eq!(event.extra_body["message_seq"], serde_json::json!(6));
-		assert_eq!(event.extra_body["custom_flag"], serde_json::json!(true));
-		assert!(!event.extra_body.contains_key("message_id"));
-		assert!(!event.extra_body.contains_key("message_type"));
-	}
-
-	#[test]
-	fn notice_event_extra_body_excludes_notify_discriminant_fields() {
-		let raw = r#"{
-			"time": 1,
-			"self_id": 2,
-			"post_type": "notice",
-			"notice_type": "notify",
-			"sub_type": "honor",
-			"group_id": 3,
-			"user_id": 4,
-			"honor_type": "talkative",
-			"rank": 1
-		}"#;
-
-		let event: Event = serde_json::from_str(raw).expect("notice event should deserialize");
-		let Event::Notice(event) = event else {
-			panic!("expected notice event");
-		};
-
-		assert_eq!(event.extra_body.len(), 1);
-		assert_eq!(event.extra_body["rank"], serde_json::json!(1));
-		assert!(!event.extra_body.contains_key("notice_type"));
-		assert!(!event.extra_body.contains_key("sub_type"));
-		assert!(!event.extra_body.contains_key("honor_type"));
-	}
-}

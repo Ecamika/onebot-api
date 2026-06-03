@@ -141,7 +141,7 @@ pub struct APIRequest {
 pub struct APIResponse {
 	pub status: String,
 	pub retcode: i32,
-	pub data: JsonValue,
+	pub data: Option<JsonValue>,
 	pub echo: Option<String>,
 }
 
@@ -154,7 +154,7 @@ impl APIResponse {
 		if !self.verify() {
 			return Err(APIRequestError::HttpError { code: self.retcode });
 		}
-		Ok(serde_json::from_value(self.data.clone())?)
+		Ok(serde_json::from_value(self.data.clone().unwrap_or(JsonValue::Null))?)
 	}
 }
 
