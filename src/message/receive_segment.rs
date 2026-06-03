@@ -2,69 +2,69 @@ use super::utils::*;
 use serde::Deserialize;
 use strum::EnumIs;
 
-#[cfg_attr(feature = "selector", derive(crate::Selector))]
+#[cfg_attr(feature = "selector", derive(onebot_api_macros::Selector))]
 #[derive(Deserialize, Debug, Clone, EnumIs)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "data")]
 pub enum ReceiveSegment {
 	#[serde(rename = "text")]
-	Text { data: TextData },
+	Text(TextData),
 
 	#[serde(rename = "face")]
-	Face { data: FaceData },
+	Face(FaceData),
 
 	#[serde(rename = "image")]
-	Image { data: ImageData },
+	Image(ImageData),
 
 	#[serde(rename = "record")]
-	Record { data: RecordData },
+	Record(RecordData),
 
 	#[serde(rename = "video")]
-	Video { data: VideoData },
+	Video(VideoData),
 
 	#[serde(rename = "at")]
-	At { data: AtData },
+	At(AtData),
 
 	#[serde(rename = "rps")]
-	Rps { data: RpsData },
+	Rps(RpsData),
 
 	#[serde(rename = "dice")]
-	Dice { data: DiceData },
+	Dice(DiceData),
 
 	#[serde(rename = "shake")]
-	Shake { data: ShakeData },
+	Shake(ShakeData),
 
 	#[serde(rename = "poke")]
-	Poke { data: PokeData },
+	Poke(PokeData),
 
 	#[serde(rename = "anonymous")]
-	Anonymous { data: AnonymousData },
+	Anonymous(AnonymousData),
 
 	#[serde(rename = "share")]
-	Share { data: ShareData },
+	Share(ShareData),
 
 	#[serde(rename = "contact")]
-	Contact { data: ContactData },
+	Contact(ContactData),
 
 	#[serde(rename = "location")]
-	Location { data: LocationData },
+	Location(LocationData),
 
 	#[serde(rename = "music")]
-	Music { data: MusicData },
+	Music(MusicData),
 
 	#[serde(rename = "reply")]
-	Reply { data: ReplyData },
+	Reply(ReplyData),
 
 	#[serde(rename = "forward")]
-	Forward { data: ForwardData },
+	Forward(ForwardData),
 
 	#[serde(rename = "node")]
-	Node { data: NodeData },
+	Node(NodeData),
 
 	#[serde(rename = "xml")]
-	Xml { data: XmlData },
+	Xml(XmlData),
 
 	#[serde(rename = "json")]
-	Json { data: JsonData },
+	Json(JsonData),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -250,4 +250,37 @@ pub struct JsonData {
 	/// 说明
 	/// JSON 内容
 	pub data: String,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn deserialize_text_segment_with_adjacently_tagged_shape() {
+		let segment: ReceiveSegment =
+			serde_json::from_str(r#"{"type":"text","data":{"text":"hello"}}"#)
+				.expect("text segment should deserialize");
+
+		match segment {
+			ReceiveSegment::Text(data) => assert_eq!(data.text, "hello"),
+			other => panic!("unexpected segment: {other:?}"),
+		}
+	}
+
+	#[test]
+	fn deserialize_nested_node_segment() {
+		let segment: ReceiveSegment = serde_json::from_str(
+			r#"{"type":"node","data":{"user_id":"1","nickname":"bot","content":[{"type":"text","data":{"text":"nested"}}]}}"#,
+		)
+		.expect("node segment should deserialize");
+
+		match segment {
+			ReceiveSegment::Node(data) => match data.content.as_slice() {
+				[ReceiveSegment::Text(text)] => assert_eq!(text.text, "nested"),
+				other => panic!("unexpected nested content: {other:?}"),
+			},
+			other => panic!("unexpected segment: {other:?}"),
+		}
+	}
 }

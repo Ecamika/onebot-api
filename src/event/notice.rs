@@ -1,5 +1,5 @@
 #[cfg(feature = "selector")]
-use crate::Selector;
+use onebot_api_macros::Selector;
 use serde::Deserialize;
 use strum::{Display, EnumIs};
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 #[cfg(feature = "selector")]
-use crate::Selector;
+use onebot_api_macros::Selector;
 use serde::Deserialize;
 use serde_json::Value;
 use strum::{Display, EnumIs};

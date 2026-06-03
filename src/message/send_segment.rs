@@ -12,67 +12,67 @@ impl<T: SendSegmentData> From<T> for SendSegment {
 }
 
 #[derive(Serialize, Debug, Clone)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "data")]
 pub enum SendSegment {
 	#[serde(rename = "text")]
-	Text { data: TextData },
+	Text(TextData),
 
 	#[serde(rename = "face")]
-	Face { data: FaceData },
+	Face(FaceData),
 
 	#[serde(rename = "image")]
-	Image { data: ImageData },
+	Image(ImageData),
 
 	#[serde(rename = "record")]
-	Record { data: RecordData },
+	Record(RecordData),
 
 	#[serde(rename = "video")]
-	Video { data: VideoData },
+	Video(VideoData),
 
 	#[serde(rename = "at")]
-	At { data: AtData },
+	At(AtData),
 
 	#[serde(rename = "rps")]
-	Rps { data: RpsData },
+	Rps(RpsData),
 
 	#[serde(rename = "dice")]
-	Dice { data: DiceData },
+	Dice(DiceData),
 
 	#[serde(rename = "shake")]
-	Shake { data: ShakeData },
+	Shake(ShakeData),
 
 	#[serde(rename = "poke")]
-	Poke { data: PokeData },
+	Poke(PokeData),
 
 	#[serde(rename = "anonymous")]
-	Anonymous { data: AnonymousData },
+	Anonymous(AnonymousData),
 
 	#[serde(rename = "share")]
-	Share { data: ShareData },
+	Share(ShareData),
 
 	#[serde(rename = "contact")]
-	Contact { data: ContactData },
+	Contact(ContactData),
 
 	#[serde(rename = "location")]
-	Location { data: LocationData },
+	Location(LocationData),
 
 	#[serde(rename = "music")]
-	Music { data: MusicData },
+	Music(MusicData),
 
 	#[serde(rename = "reply")]
-	Reply { data: ReplyData },
+	Reply(ReplyData),
 
 	#[serde(rename = "forward")]
-	Forward { data: ForwardData },
+	Forward(ForwardData),
 
 	#[serde(rename = "node")]
-	Node { data: NodeData },
+	Node(NodeData),
 
 	#[serde(rename = "xml")]
-	Xml { data: XmlData },
+	Xml(XmlData),
 
 	#[serde(rename = "json")]
-	Json { data: JsonData },
+	Json(JsonData),
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -84,7 +84,7 @@ pub struct TextData {
 
 impl SendSegmentData for TextData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Text { data: self }
+		SendSegment::Text(self)
 	}
 }
 
@@ -99,7 +99,7 @@ pub struct FaceData {
 
 impl SendSegmentData for FaceData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Face { data: self }
+		SendSegment::Face(self)
 	}
 }
 
@@ -136,7 +136,7 @@ pub struct ImageData {
 
 impl SendSegmentData for ImageData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Image { data: self }
+		SendSegment::Image(self)
 	}
 }
 
@@ -169,7 +169,7 @@ pub struct RecordData {
 
 impl SendSegmentData for RecordData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Record { data: self }
+		SendSegment::Record(self)
 	}
 }
 
@@ -197,7 +197,7 @@ pub struct VideoData {
 
 impl SendSegmentData for VideoData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Video { data: self }
+		SendSegment::Video(self)
 	}
 }
 
@@ -212,7 +212,7 @@ pub struct AtData {
 
 impl SendSegmentData for AtData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::At { data: self }
+		SendSegment::At(self)
 	}
 }
 
@@ -221,7 +221,7 @@ pub struct RpsData {}
 
 impl SendSegmentData for RpsData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Rps { data: self }
+		SendSegment::Rps(self)
 	}
 }
 
@@ -230,7 +230,7 @@ pub struct DiceData {}
 
 impl SendSegmentData for DiceData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Dice { data: self }
+		SendSegment::Dice(self)
 	}
 }
 
@@ -239,7 +239,7 @@ pub struct ShakeData {}
 
 impl SendSegmentData for ShakeData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Shake { data: self }
+		SendSegment::Shake(self)
 	}
 }
 
@@ -260,7 +260,7 @@ pub struct PokeData {
 
 impl SendSegmentData for PokeData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Poke { data: self }
+		SendSegment::Poke(self)
 	}
 }
 
@@ -275,7 +275,7 @@ pub struct AnonymousData {
 
 impl SendSegmentData for AnonymousData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Anonymous { data: self }
+		SendSegment::Anonymous(self)
 	}
 }
 
@@ -297,7 +297,7 @@ pub struct ShareData {
 
 impl SendSegmentData for ShareData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Share { data: self }
+		SendSegment::Share(self)
 	}
 }
 
@@ -314,7 +314,7 @@ pub struct ContactData {
 
 impl SendSegmentData for ContactData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Contact { data: self }
+		SendSegment::Contact(self)
 	}
 }
 
@@ -336,7 +336,7 @@ pub struct LocationData {
 
 impl SendSegmentData for LocationData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Location { data: self }
+		SendSegment::Location(self)
 	}
 }
 
@@ -370,7 +370,7 @@ pub struct MusicData {
 
 impl SendSegmentData for MusicData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Music { data: self }
+		SendSegment::Music(self)
 	}
 }
 
@@ -383,7 +383,7 @@ pub struct ReplyData {
 
 impl SendSegmentData for ReplyData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Reply { data: self }
+		SendSegment::Reply(self)
 	}
 }
 
@@ -392,7 +392,7 @@ pub struct ForwardData {}
 
 impl SendSegmentData for ForwardData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Forward { data: self }
+		SendSegment::Forward(self)
 	}
 }
 
@@ -414,7 +414,7 @@ pub struct NodeData {
 
 impl SendSegmentData for NodeData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Node { data: self }
+		SendSegment::Node(self)
 	}
 }
 
@@ -427,7 +427,7 @@ pub struct XmlData {
 
 impl SendSegmentData for XmlData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Xml { data: self }
+		SendSegment::Xml(self)
 	}
 }
 
@@ -440,6 +440,77 @@ pub struct JsonData {
 
 impl SendSegmentData for JsonData {
 	fn into_send_segment(self) -> SendSegment {
-		SendSegment::Json { data: self }
+		SendSegment::Json(self)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::json;
+
+	#[test]
+	fn serialize_text_segment_with_adjacently_tagged_shape() {
+		let value = serde_json::to_value(SendSegment::Text(TextData {
+			text: "hello".to_string(),
+		}))
+		.expect("text segment should serialize");
+
+		assert_eq!(
+			value,
+			json!({
+				"type": "text",
+				"data": {
+					"text": "hello"
+				}
+			})
+		);
+	}
+
+	#[test]
+	fn serialize_nested_node_segment() {
+		let value = serde_json::to_value(SendSegment::Node(NodeData {
+			id: None,
+			user_id: Some("1".to_string()),
+			nickname: Some("bot".to_string()),
+			content: Some(vec![SendSegment::Text(TextData {
+				text: "nested".to_string(),
+			})]),
+		}))
+		.expect("node segment should serialize");
+
+		assert_eq!(
+			value,
+			json!({
+				"type": "node",
+				"data": {
+					"id": null,
+					"user_id": "1",
+					"nickname": "bot",
+					"content": [
+						{
+							"type": "text",
+							"data": {
+								"text": "nested"
+							}
+						}
+					]
+				}
+			})
+		);
+	}
+
+	#[test]
+	fn serialize_empty_data_segment() {
+		let value =
+			serde_json::to_value(SendSegment::Rps(RpsData {})).expect("rps segment should serialize");
+
+		assert_eq!(
+			value,
+			json!({
+				"type": "rps",
+				"data": {}
+			})
+		);
 	}
 }

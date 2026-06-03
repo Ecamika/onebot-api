@@ -1,5 +1,5 @@
 #[cfg(feature = "selector")]
-use crate::Selector;
+use onebot_api_macros::Selector;
 #[cfg(feature = "quick_operation")]
 use crate::api::APISender;
 #[cfg(feature = "quick_operation")]

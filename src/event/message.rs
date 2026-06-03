@@ -190,11 +190,9 @@ impl<T: APISender + Send + Sync> QuickReplyAt<T> for MessageEventGroup {
 		msg: Vec<SendSegment>,
 		auto_escape: Option<bool>,
 	) -> APIResult<i64> {
-		let mut full_msg = vec![SendSegment::At {
-			data: AtData {
-				qq: AtType::Id(self.user_id.to_string()),
-			},
-		}];
+		let mut full_msg = vec![SendSegment::At(AtData {
+			qq: AtType::Id(self.user_id.to_string()),
+		})];
 		full_msg.extend(msg);
 		api
 			.send_group_msg(self.group_id, full_msg, auto_escape)
