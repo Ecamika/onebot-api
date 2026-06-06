@@ -1,11 +1,11 @@
-use crate::selector::{AsSelector, Selector};
-
 use super::utils::*;
 use serde::Deserialize;
+#[cfg(not(feature = "selector"))]
 use strum::EnumIs;
 
-#[cfg_attr(feature = "selector", derive(onebot_api_macros::Selector))]
-#[derive(Deserialize, Debug, Clone, EnumIs)]
+#[cfg_attr(feature = "selector", derive(tynavi::Selector))]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
 pub enum ReceiveSegment {
 	#[serde(rename = "text")]
@@ -252,24 +252,6 @@ pub struct JsonData {
 	/// 说明
 	/// JSON 内容
 	pub data: String,
-}
-
-impl<'a> AsSelector<'a, &'a [ReceiveSegment]> for &'a [ReceiveSegment] {
-	fn as_selector(&'a self) -> Selector<'a, Self> {
-		Selector { data: Some(self) }
-	}
-}
-
-impl<'a> Selector<'a, &'a [ReceiveSegment]> {
-	pub fn indexof(&self, index: usize) -> Selector<'a, ReceiveSegment> {
-		if let Some(data) = self.data
-			&& let Some(data) = data.get(index)
-		{
-			Selector { data: Some(data) }
-		} else {
-			Selector { data: None }
-		}
-	}
 }
 
 #[cfg(test)]

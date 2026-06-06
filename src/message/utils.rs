@@ -7,8 +7,9 @@ pub enum ImageType {
 	Flash,
 }
 
-#[cfg_attr(feature = "selector", derive(onebot_api_macros::Selector))]
-#[derive(Deserialize, Serialize, Debug, Clone, EnumIs)]
+#[cfg_attr(feature = "selector", derive(tynavi::Selector))]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum AtType {
 	#[serde(rename = "all")]

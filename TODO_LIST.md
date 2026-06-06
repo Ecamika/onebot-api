@@ -39,11 +39,11 @@
 
 ## P2 中期优化
 
-- [ ] 提升 `Selector` 与宏系统的测试覆盖和稳定性
-  `selector` 是偏易用性功能，但目前更像“能用的生成器”，建议补充：
-  - 结构体/枚举多层 selector 的快照测试
-  - 错误输入下的宏编译失败测试
-  - 文档中对 `variants` / `through` 的边界行为说明
+- [ ] 提升 tynavi selector 接入的测试覆盖和稳定性
+  `selector` feature 已迁移为可选依赖 `tynavi`，建议补充：
+  - 事件与消息段多层 route/filter 的快照测试
+  - feature 关闭和启用时的 API 可用性检查
+  - 文档中对 `tynavi` 生成方法和旧 Selector API 差异的说明
 
 - [ ] 梳理 `ClientBuilder` / `Client` 构造 API，减少重载歧义
   当前 `new` / `new_with_timeout` / `new_with_union_channel_cap` / `new_with_options` 并存，示例也因此容易过期。可以考虑进一步收敛到 builder 优先的风格。

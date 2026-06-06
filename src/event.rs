@@ -2,13 +2,15 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 #[cfg(feature = "selector")]
-use onebot_api_macros::Selector;
+use tynavi::Selector;
 
 use crate::event::{meta::MetaEvent, notice::NoticeEvent, request::RequestEvent};
 use message::MessageEvent;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
-use strum::{Display, EnumIs};
+use strum::Display;
+#[cfg(not(feature = "selector"))]
+use strum::EnumIs;
 
 pub mod message;
 pub mod meta;
@@ -20,7 +22,6 @@ pub mod request;
 pub struct EventMessage {
 	pub time: i64,
 	pub self_id: i64,
-	#[cfg_attr(feature = "selector", selector(through = "message_event_selector"))]
 	pub data: Box<MessageEvent>,
 	pub extra_body: HashMap<String, JsonValue>,
 }
@@ -30,7 +31,6 @@ pub struct EventMessage {
 pub struct EventNotice {
 	pub time: i64,
 	pub self_id: i64,
-	#[cfg_attr(feature = "selector", selector(through = "notice_event_selector"))]
 	pub data: NoticeEvent,
 	pub extra_body: HashMap<String, JsonValue>,
 }
@@ -40,7 +40,6 @@ pub struct EventNotice {
 pub struct EventRequest {
 	pub time: i64,
 	pub self_id: i64,
-	#[cfg_attr(feature = "selector", selector(through = "request_event_selector"))]
 	pub data: RequestEvent,
 	pub extra_body: HashMap<String, JsonValue>,
 }
@@ -50,7 +49,6 @@ pub struct EventRequest {
 pub struct EventMetaEvent {
 	pub time: i64,
 	pub self_id: i64,
-	#[cfg_attr(feature = "selector", selector(through = "meta_event_selector"))]
 	pub data: MetaEvent,
 	pub extra_body: HashMap<String, JsonValue>,
 }
@@ -228,7 +226,8 @@ impl<'de> Deserialize<'de> for EventMetaEvent {
 }
 
 #[cfg_attr(feature = "selector", derive(Selector))]
-#[derive(Deserialize, Debug, Clone, Display, EnumIs)]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone, Display)]
 #[serde(tag = "post_type")]
 pub enum KnownEvent {
 	#[serde(rename = "message")]
@@ -245,7 +244,8 @@ pub enum KnownEvent {
 }
 
 #[cfg_attr(feature = "selector", derive(Selector))]
-#[derive(Deserialize, Debug, Clone, Display, EnumIs)]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone, Display)]
 #[serde(untagged)]
 pub enum Event {
 	Known(KnownEvent),

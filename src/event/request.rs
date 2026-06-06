@@ -2,11 +2,12 @@
 use crate::api::APISender;
 #[cfg(feature = "quick_operation")]
 use crate::quick_operation::{QuickHandleFriendRequest, QuickHandleGroupRequest};
+#[cfg(feature = "quick_operation")]
 use async_trait::async_trait;
-#[cfg(feature = "selector")]
-use onebot_api_macros::Selector;
 use serde::Deserialize;
 use strum::{Display, EnumIs};
+#[cfg(feature = "selector")]
+use tynavi::Selector;
 
 #[derive(Deserialize, Debug, Copy, Clone, Display, EnumIs, Ord, PartialOrd, Eq, PartialEq)]
 pub enum GroupType {
@@ -78,7 +79,8 @@ impl<T: APISender + Send + Sync> QuickHandleGroupRequest<T> for RequestEventGrou
 }
 
 #[cfg_attr(feature = "selector", derive(Selector))]
-#[derive(Deserialize, Debug, Clone, Display, EnumIs, Ord, PartialOrd, Eq, PartialEq)]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone, Display, Ord, PartialOrd, Eq, PartialEq)]
 #[serde(tag = "request_type")]
 pub enum RequestEvent {
 	#[serde(rename = "friend")]

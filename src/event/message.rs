@@ -1,17 +1,22 @@
 #[cfg(feature = "selector")]
-use onebot_api_macros::Selector;
+use tynavi::Selector;
 
-use crate::api::APISender;
-use crate::error::{APIRequestError, APIResult};
 use crate::message::receive_segment::ReceiveSegment;
-use crate::message::send_segment::{AtData, SendSegment};
-use crate::message::utils::AtType;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIs};
 
 #[cfg(feature = "quick_operation")]
+use crate::api::APISender;
+#[cfg(feature = "quick_operation")]
+use crate::error::{APIRequestError, APIResult};
+#[cfg(feature = "quick_operation")]
+use crate::message::send_segment::{AtData, SendSegment};
+#[cfg(feature = "quick_operation")]
+use crate::message::utils::AtType;
+#[cfg(feature = "quick_operation")]
 use crate::quick_operation::{QuickBan, QuickDeleteMsg, QuickKick, QuickReplyAt, QuickSendMsg};
+#[cfg(feature = "quick_operation")]
+use async_trait::async_trait;
 
 #[derive(Deserialize, Debug, Copy, Clone, Display, EnumIs, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Sex {
@@ -233,7 +238,8 @@ impl<T: APISender + Send + Sync> QuickBan<T> for MessageEventGroup {
 }
 
 #[cfg_attr(feature = "selector", derive(Selector))]
-#[derive(Deserialize, Debug, Clone, Display, EnumIs)]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone, Display)]
 #[serde(tag = "message_type")]
 pub enum MessageEvent {
 	#[serde(rename = "private")]

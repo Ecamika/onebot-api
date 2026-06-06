@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-#[cfg(feature = "selector")]
-use onebot_api_macros::Selector;
 use serde::Deserialize;
 use serde_json::Value;
 use strum::{Display, EnumIs};
+#[cfg(feature = "selector")]
+use tynavi::Selector;
 
 #[derive(Deserialize, Debug, Copy, Clone, Display, EnumIs, Ord, PartialOrd, Eq, PartialEq)]
 pub enum LifecycleSubType {
@@ -31,7 +31,8 @@ pub struct MetaEventHeartbeat {
 }
 
 #[cfg_attr(feature = "selector", derive(Selector))]
-#[derive(Deserialize, Debug, Clone, Display, EnumIs, Eq, PartialEq)]
+#[cfg_attr(not(feature = "selector"), derive(EnumIs))]
+#[derive(Deserialize, Debug, Clone, Display, Eq, PartialEq)]
 #[serde(tag = "meta_event_type")]
 pub enum MetaEvent {
 	#[serde(rename = "lifecycle")]
