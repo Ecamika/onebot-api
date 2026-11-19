@@ -10,7 +10,7 @@ license = "MIT"
 
 [dependencies]
 onebot-api-macros = { version = "0.1.2", path = "macros" }
-tynavi = { version = "0.1.1", path = "../tynavi", features = ["derive"], optional = true }
+tynavi = { version = "0.1.1", features = ["derive"], optional = true }
 
 #async-stream = "0.3.6"
 async-trait = "0.1.89"
